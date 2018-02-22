@@ -1,7 +1,5 @@
 import numpy as np
 
-
-
 class Environment(object):
 
   def act(self, action):

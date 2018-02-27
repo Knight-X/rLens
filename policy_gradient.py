@@ -20,11 +20,14 @@ https://medium.com/@awjuliani/super-simple-reinforcement-learning-tutorial-part-
 
 import collections
 import subprocess
+import operator
 import time
 import os
+from shutil import copyfile
 import numpy as np
 import sys
 import tensorflow as tf
+import sys
 
 import grid
 import parse
@@ -174,13 +177,14 @@ class PolicyGradientNetwork(object):
         self.action_softmax = tf.nn.softmax(connected_3, name='action_softmax')
 
         # Sum the components of the softmax
-        probability_histogram = tf.cumsum(self.action_softmax, axis=1)
+        '''probability_histogram = tf.cumsum(self.action_softmax, axis=1)
         sample = tf.random_uniform(tf.shape(probability_histogram)[:-1])
         filtered = tf.where(probability_histogram >= sample,
                             probability_histogram,
                             tf.ones_like(probability_histogram))
 
         self.action_out = tf.argmin(filtered, 1)
+        '''
 
         self.action_in = tf.placeholder(tf.int32, shape=[None, 1])
         self.advantage = tf.placeholder(tf.float32, shape=[None, 1])
@@ -218,7 +222,7 @@ class PolicyGradientNetwork(object):
       An array of actions, 0 .. 4 and an array of array of
       probabilities.
     '''
-    return session.run([self.action_out, self.action_softmax],
+    return session.run(self.action_softmax,
                        feed_dict={self.state: states})
 
   def train(self, session, episodes):
@@ -263,6 +267,7 @@ class PolicyGradientPlayer(grid.Player):
     self._experiences = collections.deque([], _EXPERIENCE_BUFFER_SIZE)
     self._experience = []
     self._session = session
+    self._p = subprocess.Popen(['./llvm-reg/llvm/build/bin/llc', '-debug-only=regallocdl', '--regalloc=drl', 'foo.ll', '-o', 'convba.s'],shell=False, stdout=subprocess.PIPE)
 
   def interact(self, ctx, env):
     terminal = env.in_terminal_state()
@@ -270,39 +275,77 @@ class PolicyGradientPlayer(grid.Player):
       self._experiences.append(self._experience)
       self._experience = []
       self._net.train(self._session, self._experiences)
-      sim.reset()
+      env.reset(self._p)
     else:
       state, reward_map = self.getState()
-      reward = self.doAction(state, reward_map, env)
-      self._experience.append((state, action, reward))
+      reward, action = self.doAction(state, reward_map, env)
+      self._experience.append((state, action, float(reward)))
   def getState(self):
       print "statedone start..."
-      subprocess.Popen(['./llvm-reg/llvm/build/bin/llc', '--regalloc=drl', 'conv.ll', '-o', 'convba.s'],shell=False, stdout=subprocess.PIPE)
+
       while not os.path.exists("/media/disk1/workspace/statedone.txt"):
+        if os.path.exists("state.txt"):
+          os.remove("state.txt")
         print "statedone not exist..."
       
       print "python state done exist..."
       state, reward_map = parse.fileToImage("state.txt")
+      copyfile("state.txt", "pstate.txt")
       os.remove("statedone.txt")
-      os.remove("state.txt")
+      if os.path.exists("statedone.txt"):
+        print "statedone.txt should not exist"
       print "python state end..."
       return state, reward_map
 
+  def choose(self, softmax, reward):
+      actions = {}
+      g = open("rawcandidate.txt", "w")
+      for i in reward.iteritems():
+          g.write(str(i))
+          g.write(' ')
+      g.close()
+      for i in reward.iterkeys():
+        actions[i] = softmax[0][int(i)]
+      f = open("actioncandidate.txt", "w")
+      for h in actions.iteritems():
+        f.write(str(h))
+        f.write(' ')
+      f.close()
+      action = max(actions.iteritems(), key=operator.itemgetter(1))[0]
+      val = reward[action]
+      del reward[action]
+      return action, val
+
+      
+
   def doAction(self, state, reward_map, env):
       res_action = 0
-      print "endter do action..."
+      reward = 0.0
+      print "enter do action..."
+      if os.path.exists("actiondone.txt"):
+        print "actiondone.txt should not exist"
+        sys.exit(0)
       while not os.path.exists("actiondone.txt"):
         while not os.path.exists("actionstart.txt"):
           if os.path.exists("actiondone.txt"):
             break
           print "python not action start..."
-          time.sleep(200)
+          time.sleep(1)
         if os.path.exists("actiondone.txt"):
             break
         print "python accept action start..."
-        [[action], softmax] = self._net.predict(self._session, [state])
-        reward = env.act(action)
+        softmax = self._net.predict(self._session, [state])
+        action, r = self.choose(softmax, reward_map)
+        env.act(action)
         res_action = action
+        reward = r
         os.remove("actionstart.txt")
-      reward = reward_map[res_action]
-      return reward 
+        print "prepare action done"
+      print "python accept actiondone..."
+      os.remove("actiondone.txt")
+      if os.path.exists("actiondone.txt"):
+        print "actiondone.txt should not exist"
+      os.remove("action.txt")
+      if os.path.exists("action.txt"):
+        print "action.txt should not exist"
+      return reward, res_action 

@@ -1,5 +1,7 @@
 import numpy as np
 
+import subprocess
+import os
 
 
 class Environment(object):
@@ -11,8 +13,15 @@ class Environment(object):
         g = open("actionbarrier.txt", "w")
         g.close()
   def in_terminal_state(self):
-        return False
         if os.path.isfile("terminal.txt") == True:
             os.remove("terminal.txt")
             return True
+        return False
+  def reset(self, process):
+      process.terminate()
+      process.wait()
+      print "process finish"
+      process = subprocess.Popen(['./llvm-reg/llvm/build/bin/llc', '-debug-only=regallocdl', '--regalloc=drl', 'conv.ll', '-o', 'convba.s'],shell=False, stdout=subprocess.PIPE)
+      return process
+
 

@@ -23,6 +23,7 @@ import curses
 import random
 import sys
 import time
+import socket
 import os
 
 
@@ -31,6 +32,8 @@ import policy_gradient
 import tensorflow as tf
 import environment as en
 
+HOST = '127.0.0.1'
+PORT = 1992
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 class Player(object):
@@ -69,7 +72,9 @@ def main():
   if True:
     g = tf.Graph()
     s = tf.Session(graph=g)
-    player = policy_gradient.PolicyGradientPlayer(g, s, [247, 247])
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind((HOST, PORT))
+    player = policy_gradient.PolicyGradientPlayer(g, s, [247, 247], sock)
     with g.as_default():
         init = tf.initialize_all_variables()
         s.run(init)

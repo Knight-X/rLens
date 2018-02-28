@@ -32,13 +32,13 @@ def fileToImage(state):
             rewarddata = infile[rewardline].split("&") 
             reward_dic = outputdict(rewarddata)
             return img, reward_dic
-        print "firstline: " + line[0]
+        #print "firstline: " + line[0]
         for x in range(1, len(line), 2):
           if int(line[x]) > len(arr) or int(line[x + 1]) > len(arr):
             arr.resize((int(line[x + 1]) + 1, 247))
           if int(line[x]) < minimum:
             minimum = int(line[x])
-          print "begin: " + line[x] + "end: " + line[x+1]
+          #print "begin: " + line[x] + "end: " + line[x+1]
           for r in range(int(line[x]), int(line[x + 1]) + 1):
             arr[r][int(line[0])] = 255
     res = np.split(arr, arr.shape[0])

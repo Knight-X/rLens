@@ -28,6 +28,7 @@ import numpy as np
 import sys
 import tensorflow as tf
 import sys
+import socket
 
 import grid
 import parse
@@ -260,44 +261,50 @@ _EXPERIENCE_BUFFER_SIZE = 5
 
 
 class PolicyGradientPlayer(grid.Player):
-  def __init__(self, graph, session, world_size_w_h):
+  def __init__(self, graph, session, world_size_w_h, sock):
     super(PolicyGradientPlayer, self).__init__()
     w, h = world_size_w_h
     self._net = PolicyGradientNetwork('net', graph, (h, w))
     self._experiences = collections.deque([], _EXPERIENCE_BUFFER_SIZE)
     self._experience = []
     self._session = session
-    self._p = subprocess.Popen(['./llvm-reg/llvm/build/bin/llc', '-debug-only=regallocdl', '--regalloc=drl', 'foo.ll', '-o', 'convba.s'],shell=False, stdout=subprocess.PIPE)
+    self._p = subprocess.Popen(['./llvm-reg/llvm/build/bin/llc', '-debug-only=regallocdl', '--regalloc=drl', 'conv.ll', '-o', 'convba.s'],shell=False, stdout=subprocess.PIPE)
+    self._iter = 1
+    self._sock = sock
+    self._sock.listen(5)
+    print "start listen"
 
   def interact(self, ctx, env):
-    terminal = env.in_terminal_state()
+    print "start accept " + str(self._iter)
+    conn, addr = self._sock.accept()
+    data = conn.recv(1024)
+    #terminal = env.in_terminal_state()
+    if data[0] == 'e':
+        terminal = True
+    else:
+        terminal = False
     if terminal:
       self._experiences.append(self._experience)
       self._experience = []
       self._net.train(self._session, self._experiences)
-      env.reset(self._p)
+      self._p = env.reset(self._p)
+      self._iter = 1 
     else:
-      state, reward_map = self.getState()
+      state, reward_map = self.getState(data)
       reward, action = self.doAction(state, reward_map, env)
+      conn.send(str(action))
       self._experience.append((state, action, float(reward)))
-  def getState(self):
-      print "statedone start..."
+      self._iter = self._iter + 1
+  def getState(self, data):
 
-      while not os.path.exists("/media/disk1/workspace/statedone.txt"):
-        if os.path.exists("state.txt"):
-          os.remove("state.txt")
-        print "statedone not exist..."
-      
-      print "python state done exist..."
+      if int(data) == self._iter:
+          print data
+          sys.exit(0)
       state, reward_map = parse.fileToImage("state.txt")
-      copyfile("state.txt", "pstate.txt")
-      os.remove("statedone.txt")
-      if os.path.exists("statedone.txt"):
-        print "statedone.txt should not exist"
-      print "python state end..."
       return state, reward_map
 
   def choose(self, softmax, reward):
+      print reward
       actions = {}
       g = open("rawcandidate.txt", "w")
       for i in reward.iteritems():
@@ -321,31 +328,9 @@ class PolicyGradientPlayer(grid.Player):
   def doAction(self, state, reward_map, env):
       res_action = 0
       reward = 0.0
-      print "enter do action..."
-      if os.path.exists("actiondone.txt"):
-        print "actiondone.txt should not exist"
-        sys.exit(0)
-      while not os.path.exists("actiondone.txt"):
-        while not os.path.exists("actionstart.txt"):
-          if os.path.exists("actiondone.txt"):
-            break
-          print "python not action start..."
-          time.sleep(1)
-        if os.path.exists("actiondone.txt"):
-            break
-        print "python accept action start..."
-        softmax = self._net.predict(self._session, [state])
-        action, r = self.choose(softmax, reward_map)
-        env.act(action)
-        res_action = action
-        reward = r
-        os.remove("actionstart.txt")
-        print "prepare action done"
-      print "python accept actiondone..."
-      os.remove("actiondone.txt")
-      if os.path.exists("actiondone.txt"):
-        print "actiondone.txt should not exist"
-      os.remove("action.txt")
-      if os.path.exists("action.txt"):
-        print "action.txt should not exist"
+      softmax = self._net.predict(self._session, [state])
+      action, r = self.choose(softmax, reward_map)
+      env.act(action)
+      res_action = action
+      reward = r
       return reward, res_action 

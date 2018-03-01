@@ -178,14 +178,14 @@ class PolicyGradientNetwork(object):
         self.action_softmax = tf.nn.softmax(connected_3, name='action_softmax')
 
         # Sum the components of the softmax
-        '''probability_histogram = tf.cumsum(self.action_softmax, axis=1)
+        probability_histogram = tf.cumsum(self.action_softmax, axis=1)
         sample = tf.random_uniform(tf.shape(probability_histogram)[:-1])
         filtered = tf.where(probability_histogram >= sample,
                             probability_histogram,
                             tf.ones_like(probability_histogram))
 
+        self.filtered = filtered
         self.action_out = tf.argmin(filtered, 1)
-        '''
 
         self.action_in = tf.placeholder(tf.int32, shape=[None, 1])
         self.advantage = tf.placeholder(tf.float32, shape=[None, 1])
@@ -223,7 +223,8 @@ class PolicyGradientNetwork(object):
       An array of actions, 0 .. 4 and an array of array of
       probabilities.
     '''
-    return session.run(self.action_softmax,
+    return session.run([self.action_out, self.action_softmax,
+                       self.filtered],
                        feed_dict={self.state: states})
 
   def train(self, session, episodes):
@@ -268,7 +269,7 @@ class PolicyGradientPlayer(grid.Player):
     self._experiences = collections.deque([], _EXPERIENCE_BUFFER_SIZE)
     self._experience = []
     self._session = session
-    self._p = subprocess.Popen(['./llvm-reg/llvm/build/bin/llc', '-debug-only=regallocdl', '--regalloc=drl', 'conv.ll', '-o', 'convba.s'],shell=False, stdout=subprocess.PIPE)
+    self._p = subprocess.Popen(['./llvm-reg/llvm/build/bin/llc', '-debug-only=regallocdl', '--regalloc=drl', 'foo.ll', '-o', 'convba.s'],shell=False, stdout=subprocess.PIPE)
     self._iter = 1
     self._sock = sock
     self._sock.listen(5)
@@ -300,37 +301,26 @@ class PolicyGradientPlayer(grid.Player):
       if int(data) == self._iter:
           print data
           sys.exit(0)
-      state, reward_map = parse.fileToImage("state.txt")
+      state, reward_map = parse.fileToImage("state.txt", self._iter)
       return state, reward_map
 
-  def choose(self, softmax, reward):
+  def choose(self, reward, filtered):
       print reward
-      actions = {}
-      g = open("rawcandidate.txt", "w")
-      for i in reward.iteritems():
-          g.write(str(i))
-          g.write(' ')
-      g.close()
-      for i in reward.iterkeys():
-        actions[i] = softmax[0][int(i)]
-      f = open("actioncandidate.txt", "w")
-      for h in actions.iteritems():
-        f.write(str(h))
-        f.write(' ')
-      f.close()
-      action = max(actions.iteritems(), key=operator.itemgetter(1))[0]
-      val = reward[action]
-      del reward[action]
-      return action, val
+      actions = {} 
+      for i in range(255):
+          if reward.get(str(i)) != None:
+              actions[i] = filtered[i]
+
+      return min(actions, key=actions.get)
 
       
 
   def doAction(self, state, reward_map, env):
       res_action = 0
       reward = 0.0
-      softmax = self._net.predict(self._session, [state])
-      action, r = self.choose(softmax, reward_map)
+      [[action], [softmax], [filtered]] = self._net.predict(self._session, [state])
+      action = self.choose(reward_map, filtered)
       env.act(action)
       res_action = action
-      reward = r
+      reward = reward_map[str(action)]
       return reward, res_action 

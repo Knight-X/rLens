@@ -19,28 +19,38 @@ def outputdict(reward):
   g.close()
   return actions
 
-def fileToImage(state):
+def fileToImage(state, iteration):
     infile = open(state, "r").readlines()
-    arr = np.zeros((247, 247))
+    vreg =infile[0].split("&")
+    slotstart = int(vreg[1])
+    slotend = int(vreg[2])
+    minimum = slotstart 
+    if slotstart >= 10:
+        minimum = slotstart - 10
+    else:
+        minimum = 0
+    arr = np.zeros((max(minimum + 1, 247), 247))
     img = np.copy(arr)
-    minimum = 999999
-    rewardline = 0
-    for index in range(0, len(infile)):
+
+    rewarddata = infile[2].split("&")
+    reward_dic = outputdict(rewarddata)
+
+    for index in range(3, len(infile)):
         line = infile[index].split("&")
-        if line[0] == "reward\n":
-            rewardline = index+1
-            rewarddata = infile[rewardline].split("&") 
-            reward_dic = outputdict(rewarddata)
-            return img, reward_dic
+        if line[0] == "reward\n" or line[0] == "3333":
+            continue;
+
         #print "firstline: " + line[0]
         for x in range(1, len(line), 2):
           if int(line[x]) > len(arr) or int(line[x + 1]) > len(arr):
             arr.resize((int(line[x + 1]) + 1, 247))
-          if int(line[x]) < minimum:
-            minimum = int(line[x])
+          if slotstart > len(arr) or slotend > len(arr):
+            arr.resize(slotend + 1, 247)
           #print "begin: " + line[x] + "end: " + line[x+1]
           for r in range(int(line[x]), int(line[x + 1]) + 1):
-            arr[r][int(line[0])] = 255
+            arr[r][int(line[0])] = 125
+        for sloti in range(slotstart, min(slotstart + 247, slotend)):
+            arr[sloti][int(line[0])] = 255 
     res = np.split(arr, arr.shape[0])
     img = np.copy(res[minimum])
     black = np.zeros((1, 247))
@@ -52,9 +62,8 @@ def fileToImage(state):
     shape = img.shape
     if shape[0] != 247 and shape[1] != 247:
         print "dim wrong"
-    rewarddata = infile[rewardline].split("&") 
-    reward_dic = outputdict(rewarddata)
-    cv2.imwrite("filename.png", img)
+    name = "filename" + str(iteration) + ".png"
+    cv2.imwrite(name, img)
     return img, reward_dic
 
 

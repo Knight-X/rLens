@@ -21,7 +21,7 @@ class Environment(object):
       process.terminate()
       process.wait()
       print "process finish"
-      process = subprocess.Popen(['./llvm-reg/llvm/build/bin/llc', '-debug-only=regallocdl', '--regalloc=drl', 'conv.ll', '-o', 'convba.s'],shell=False, stdout=subprocess.PIPE)
+      process = subprocess.Popen(['./llvm-reg/llvm/build/bin/llc', '-debug-only=regallocdl', '--regalloc=drl', 'foo.ll', '-o', 'convba.s'],shell=False, stdout=subprocess.PIPE)
       return process
 
 

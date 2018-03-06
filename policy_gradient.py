@@ -178,14 +178,15 @@ class PolicyGradientNetwork(object):
         self.action_softmax = tf.nn.softmax(connected_3, name='action_softmax')
 
         # Sum the components of the softmax
-        probability_histogram = tf.cumsum(self.action_softmax, axis=1)
-        sample = tf.random_uniform(tf.shape(probability_histogram)[:-1])
-        filtered = tf.where(probability_histogram >= sample,
-                            probability_histogram,
-                            tf.ones_like(probability_histogram))
+#        probability_histogram = tf.cumsum(self.action_softmax, axis=1)
+#        sample = tf.random_uniform(tf.shape(probability_histogram)[:-1])
+#        filtered = tf.where(probability_histogram >= sample,
+#                            probability_histogram,
+#                            tf.ones_like(probability_histogram))
 
-        self.filtered = filtered
-        self.action_out = tf.argmin(filtered, 1)
+        
+        #self.filtered = filtered
+        self.action_out = tf.argmin(self.action_softmax, 1)
 
         self.action_in = tf.placeholder(tf.int32, shape=[None, 1])
         self.advantage = tf.placeholder(tf.float32, shape=[None, 1])
@@ -198,18 +199,26 @@ class PolicyGradientNetwork(object):
             name='loss_policy')
         # TODO: Investigate whether regularization losses are sums or
         # means and consider removing the division.
-        loss_regularization = (0.05 / tf.to_float(tf.shape(self.state)[0]) *
-            sum(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)))
-        self.loss = loss_policy + loss_regularization
+        #loss_regularization = (0.05 / tf.to_float(tf.shape(self.state)[0]) *
+        #    sum(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)))
+        #self.loss = loss_policy + loss_regularization
+        self.loss = loss_policy
 
-        tf.summary.scalar('loss_policy', loss_policy)
-        tf.summary.scalar('loss_regularization', loss_regularization)
+        #tf.summary.scalar('loss_policy', loss_policy)
+        #tf.summary.scalar('loss_regularization', loss_regularization)
 
         # TODO: Use a decaying learning rate
-        optimizer = tf.train.AdamOptimizer(learning_rate=0.05)
+        #optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
+        #initial_learning_rate = 0.1
+        #global_step = tf.Variable(0, trainable=False)
+
+        #learning_rate = tf.train.exponential_decay(initial_learning_rate,
+        #                                           global_step=global_step,
+        #                                           decay_steps=100000,decay_rate=0.96)
+        optimizer = tf.train.AdamOptimizer(learning_rate=0.0000625)
         self.update = optimizer.minimize(self.loss)
 
-        self.summary = tf.summary.merge_all()
+        #self.summary = tf.summary.merge_all()
 
   def predict(self, session, states):
     '''Chooses actions for a list of states.
@@ -223,8 +232,7 @@ class PolicyGradientNetwork(object):
       An array of actions, 0 .. 4 and an array of array of
       probabilities.
     '''
-    return session.run([self.action_out, self.action_softmax,
-                       self.filtered],
+    return session.run([self.action_out, self.action_softmax],
                        feed_dict={self.state: states})
 
   def train(self, session, episodes):
@@ -240,25 +248,27 @@ class PolicyGradientNetwork(object):
     action_in = np.empty([size, 1])
     advantage = np.empty([size, 1])
     i = 0
+    print "start traing... batch_size: " + str(size)
     for episode in episodes:
+      episode_size = len(episode)
       r = 0.0
       for step_state, action, reward in reversed(episode):
         state[i,:,:] = step_state
         action_in[i,0] = action
-        r = reward + 0.97 * r
+        r = (reward / episode_size)+ 0.97 * r
         advantage[i,0] = r
         i += 1
     # Scale rewards to have zero mean, unit variance
     advantage = (advantage - np.mean(advantage)) / np.var(advantage)
 
-    session.run([self.summary, self.update], feed_dict={
+    return session.run([self.loss, self.update], feed_dict={
         self.state: state,
         self.action_in: action_in,
         self.advantage: advantage
       })
 
 
-_EXPERIENCE_BUFFER_SIZE = 5
+_EXPERIENCE_BUFFER_SIZE = 30
 
 
 class PolicyGradientPlayer(grid.Player):
@@ -273,6 +283,7 @@ class PolicyGradientPlayer(grid.Player):
     self._iter = 1
     self._sock = sock
     self._sock.listen(5)
+    self._totalr = 0.0
     print "start listen"
 
   def interact(self, ctx, env):
@@ -287,39 +298,51 @@ class PolicyGradientPlayer(grid.Player):
     if terminal:
       self._experiences.append(self._experience)
       self._experience = []
-      self._net.train(self._session, self._experiences)
+      summary, _ = self._net.train(self._session, self._experiences)
       self._p = env.reset(self._p)
       self._iter = 1 
+      print "loss"
+      print summary
+      with open("result3.txt", "a") as myfile:
+          con = "loss: " + str(summary) + " score: " + str(self._totalr)
+          myfile.write(con)
+          myfile.write("\n")
+      self._totalr = 0.0
     else:
       state, reward_map = self.getState(data)
       reward, action = self.doAction(state, reward_map, env)
       conn.send(str(action))
       self._experience.append((state, action, float(reward)))
       self._iter = self._iter + 1
+      self._totalr = self._totalr + float(reward)
   def getState(self, data):
 
       if int(data) == self._iter:
           print data
           sys.exit(0)
-      state, reward_map = parse.fileToImage("state.txt", self._iter)
+      state, reward_map, _ = parse.fileToImage("state.txt", self._iter)
       return state, reward_map
 
   def choose(self, reward, filtered):
       print reward
       actions = {} 
       for i in range(255):
-          if reward.get(str(i)) != None:
+          if reward.get(str(i)) == None:
+              filtered[i] = -1.0
+          else:
               actions[i] = filtered[i]
+      print "actions result:"
+      print actions
 
-      return min(actions, key=actions.get)
+      return np.argmax(filtered)
 
       
 
   def doAction(self, state, reward_map, env):
       res_action = 0
       reward = 0.0
-      [[action], [softmax], [filtered]] = self._net.predict(self._session, [state])
-      action = self.choose(reward_map, filtered)
+      [[action], [softmax]] = self._net.predict(self._session, [state])
+      action = self.choose(reward_map, softmax)
       env.act(action)
       res_action = action
       reward = reward_map[str(action)]

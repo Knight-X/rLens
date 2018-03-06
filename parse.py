@@ -5,18 +5,8 @@ from skimage.transform import resize
 
 def outputdict(reward):
   actions = {}
-  g = open("beforeparsecandidate.txt", "w")
-  for i in range(len(reward) / 2):
-    g.write(str(reward[i]))
-    g.write(' ')
-  g.close()
   for i in range(len(reward) / 2):
       actions[reward[i * 2]] = reward[i * 2 + 1]
-  g = open("parsecandidate.txt", "w")
-  for i in actions.iteritems():
-    g.write(str(i))
-    g.write(' ')
-  g.close()
   return actions
 
 def fileToImage(state, iteration):
@@ -35,7 +25,9 @@ def fileToImage(state, iteration):
     rewarddata = infile[2].split("&")
     reward_dic = outputdict(rewarddata)
 
-    for index in range(3, len(infile)):
+    vrewarddata = infile[4].split("&")
+    vreward_dic = outputdict(vrewarddata)
+    for index in range(5, len(infile)):
         line = infile[index].split("&")
         if line[0] == "reward\n" or line[0] == "3333":
             continue;
@@ -49,8 +41,12 @@ def fileToImage(state, iteration):
           #print "begin: " + line[x] + "end: " + line[x+1]
           for r in range(int(line[x]), int(line[x + 1]) + 1):
             arr[r][int(line[0])] = 125
+    for key in reward_dic:
         for sloti in range(slotstart, min(slotstart + 247, slotend)):
-            arr[sloti][int(line[0])] = 255 
+            arr[sloti][int(key)] = 255 
+    for key in vreward_dic:
+        for sloti in range(slotstart, min(slotstart + 247, slotend)):
+            arr[sloti][int(key)] = 200
     res = np.split(arr, arr.shape[0])
     img = np.copy(res[minimum])
     black = np.zeros((1, 247))
@@ -64,7 +60,8 @@ def fileToImage(state, iteration):
         print "dim wrong"
     name = "filename" + str(iteration) + ".png"
     cv2.imwrite(name, img)
-    return img, reward_dic
+    reward_dic.update(vreward_dic)
+    return img, reward_dic, arr
 
 
 """ for i in range(100, 101):

@@ -18,6 +18,7 @@ This is based on
 https://medium.com/@awjuliani/super-simple-reinforcement-learning-tutorial-part-2-ded33892c724
 '''
 
+import struct
 import collections
 import subprocess
 import operator
@@ -38,6 +39,10 @@ _EMBEDDING_SIZE = 3
 _FEATURE_SIZE = 3
 _ACTION_SIZE = 255
 
+_EXPERIENCE_BUFFER_SIZE = 6 
+
+
+chkpt_file = 'best_cnn.ckpt'
 
 class PolicyGradientNetwork(object):
   '''A policy gradient network.
@@ -199,10 +204,9 @@ class PolicyGradientNetwork(object):
             name='loss_policy')
         # TODO: Investigate whether regularization losses are sums or
         # means and consider removing the division.
-        #loss_regularization = (0.05 / tf.to_float(tf.shape(self.state)[0]) *
-        #    sum(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)))
-        #self.loss = loss_policy + loss_regularization
-        self.loss = loss_policy
+        loss_regularization = (0.05 / tf.to_float(tf.shape(self.state)[0]) *
+            sum(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)))
+        self.loss = loss_policy + loss_regularization
 
         #tf.summary.scalar('loss_policy', loss_policy)
         #tf.summary.scalar('loss_regularization', loss_regularization)
@@ -217,6 +221,7 @@ class PolicyGradientNetwork(object):
         #                                           decay_steps=100000,decay_rate=0.96)
         optimizer = tf.train.AdamOptimizer(learning_rate=0.0000625)
         self.update = optimizer.minimize(self.loss)
+      self._saver = tf.train.Saver()
 
         #self.summary = tf.summary.merge_all()
 
@@ -268,9 +273,6 @@ class PolicyGradientNetwork(object):
       })
 
 
-_EXPERIENCE_BUFFER_SIZE = 30
-
-
 class PolicyGradientPlayer(grid.Player):
   def __init__(self, graph, session, world_size_w_h, sock):
     super(PolicyGradientPlayer, self).__init__()
@@ -279,12 +281,14 @@ class PolicyGradientPlayer(grid.Player):
     self._experiences = collections.deque([], _EXPERIENCE_BUFFER_SIZE)
     self._experience = []
     self._session = session
-    self._p = subprocess.Popen(['./llvm-reg/llvm/build/bin/llc', '-debug-only=regallocdl', '--regalloc=drl', 'foo.ll', '-o', 'convba.s'],shell=False, stdout=subprocess.PIPE)
+    self._p = subprocess.Popen(['./llvm-reg/llvm/build/bin/llc', '-debug-only=regallocdl', '--regalloc=drl', 'add.ll', '-o', 'convba.s'],shell=False, stdout=subprocess.PIPE)
     self._iter = 1
     self._sock = sock
     self._sock.listen(5)
     self._totalr = 0.0
     print "start listen"
+    self.best_reward = 0
+    self._saver = self._net._saver
 
   def interact(self, ctx, env):
     print "start accept " + str(self._iter)
@@ -301,6 +305,13 @@ class PolicyGradientPlayer(grid.Player):
       summary, _ = self._net.train(self._session, self._experiences)
       self._p = env.reset(self._p)
       self._iter = 1 
+      if summary < 0.1 and self._totalr > self.best_reward:
+          self.best_reward = self._totalr
+          save_path = self._saver.save(self._session, chkpt_file)
+          with open("modelsave.txt", "a") as myfile:
+            con = "Model saved in file: " + save_path + "best_reward: " + str(self.best_reward)
+            myfile.write(con)
+            myfile.write("\n")
       print "loss"
       print summary
       with open("result3.txt", "a") as myfile:
@@ -317,8 +328,9 @@ class PolicyGradientPlayer(grid.Player):
       self._totalr = self._totalr + float(reward)
   def getState(self, data):
 
-      if int(data) == self._iter:
-          print data
+      data = struct.unpack("!i", data)[0]
+      if int(data) != self._iter:
+          print "c++ iter: " + data + " python iter: " + str(self._iter)
           sys.exit(0)
       state, reward_map, _ = parse.fileToImage("state.txt", self._iter)
       return state, reward_map

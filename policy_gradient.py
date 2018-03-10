@@ -36,8 +36,7 @@ import parse
 
 
 _EMBEDDING_SIZE = 3
-_FEATURE_SIZE = 3
-_ACTION_SIZE = 255
+_FEATURE_SIZE = 4
 
 _EXPERIENCE_BUFFER_SIZE = 6 
 
@@ -64,7 +63,7 @@ class PolicyGradientNetwork(object):
     summary: Merged summaries.
   '''
 
-  def __init__(self, name, graph, world_size_h_w):
+  def __init__(self, name, graph, world_size_h_w, _ACTION_SIZE):
     '''Creates a PolicyGradientNetwork.
 
     Args:
@@ -80,7 +79,7 @@ class PolicyGradientNetwork(object):
       with tf.variable_scope(name) as self.variables:
         self.state = tf.placeholder(tf.int32, shape=[None, h, w])
 
-        # Input embedding
+       # Input embedding
         embedding = tf.get_variable(
             'embedding', shape=[_FEATURE_SIZE, _EMBEDDING_SIZE],
             initializer=initializer)
@@ -183,14 +182,14 @@ class PolicyGradientNetwork(object):
         self.action_softmax = tf.nn.softmax(connected_3, name='action_softmax')
 
         # Sum the components of the softmax
-#        probability_histogram = tf.cumsum(self.action_softmax, axis=1)
-#        sample = tf.random_uniform(tf.shape(probability_histogram)[:-1])
-#        filtered = tf.where(probability_histogram >= sample,
-#                            probability_histogram,
-#                            tf.ones_like(probability_histogram))
+        probability_histogram = tf.cumsum(self.action_softmax, axis=1)
+        sample = tf.random_uniform(tf.shape(probability_histogram)[:-1])
+        filtered = tf.where(probability_histogram >= sample,
+                            probability_histogram,
+                            tf.ones_like(probability_histogram))
 
         
-        #self.filtered = filtered
+        self.filtered = filtered
         self.action_out = tf.argmin(self.action_softmax, 1)
 
         self.action_in = tf.placeholder(tf.int32, shape=[None, 1])
@@ -219,7 +218,8 @@ class PolicyGradientNetwork(object):
         #learning_rate = tf.train.exponential_decay(initial_learning_rate,
         #                                           global_step=global_step,
         #                                           decay_steps=100000,decay_rate=0.96)
-        optimizer = tf.train.AdamOptimizer(learning_rate=0.0000625)
+        optimizer = tf.train.AdamOptimizer(learning_rate=0.0000625) #deepmind suggest 0.0000625
+        #optimizer = tf.train.AdamOptimizer(learning_rate=0.0000325) deepmind suggest 0.0000625
         self.update = optimizer.minimize(self.loss)
       self._saver = tf.train.Saver()
 
@@ -237,7 +237,7 @@ class PolicyGradientNetwork(object):
       An array of actions, 0 .. 4 and an array of array of
       probabilities.
     '''
-    return session.run([self.action_out, self.action_softmax],
+    return session.run([self.action_out, self.filtered],
                        feed_dict={self.state: states})
 
   def train(self, session, episodes):
@@ -255,12 +255,13 @@ class PolicyGradientNetwork(object):
     i = 0
     print "start traing... batch_size: " + str(size)
     for episode in episodes:
-      episode_size = len(episode)
+      #episode_size = len(episode)
       r = 0.0
       for step_state, action, reward in reversed(episode):
         state[i,:,:] = step_state
         action_in[i,0] = action
-        r = (reward / episode_size)+ 0.97 * r
+        #r = (reward / episode_size)+ 0.97 * r
+        r = reward + 0.97 * r
         advantage[i,0] = r
         i += 1
     # Scale rewards to have zero mean, unit variance
@@ -272,12 +273,54 @@ class PolicyGradientNetwork(object):
         self.advantage: advantage
       })
 
+class RandomPlayer:
+  def __init__(self, sock):
+    self._iter = 1
+    self._p = subprocess.Popen(['./llvm-reg/llvm/build/bin/llc', '-debug-only=regallocdl', '--regalloc=drl', 'add.ll', '-o', 'convba.s'],shell=False, stdout=subprocess.PIPE)
+    self._sock = sock
+    self._sock.listen(5)
+
+  def interact(self, env):
+    terminal = False
+    actions = set()
+    while (terminal == False):
+      print "start accept " + str(self._iter)
+      conn, addr = self._sock.accept()
+      data = conn.recv(1024)
+      if (data[0] == 'e'):
+        terminal = True
+        break
+      reward_map = self.getState(data)
+      action = self.doAction(reward_map, env)
+      conn.send(str(action))
+      self._iter = self._iter + 1
+      for g in reward_map.keys():
+        actions.add(g)
+
+    self._iter = 1 
+    self._totalr = 0.0
+    env.terminate(self._p)
+    return actions 
+
+  def getState(self, data):
+
+      data = struct.unpack("!i", data)[0]
+      if int(data) != self._iter:
+          print "c++ iter: " + data + " python iter: " + str(self._iter)
+          sys.exit(0)
+      state, reward_map, _ = parse.fileToImage("state.txt", self._iter)
+      return reward_map
+
+  def doAction(self, reward_map, env):
+      action = reward_map.keys()[0]
+      env.act(action)
+      return action 
 
 class PolicyGradientPlayer(grid.Player):
-  def __init__(self, graph, session, world_size_w_h, sock):
+  def __init__(self, graph, session, world_size_w_h, sock, idx2regs, regs2idx):
     super(PolicyGradientPlayer, self).__init__()
     w, h = world_size_w_h
-    self._net = PolicyGradientNetwork('net', graph, (h, w))
+    self._net = PolicyGradientNetwork('net', graph, (h, w), len(idx2regs))
     self._experiences = collections.deque([], _EXPERIENCE_BUFFER_SIZE)
     self._experience = []
     self._session = session
@@ -289,6 +332,8 @@ class PolicyGradientPlayer(grid.Player):
     print "start listen"
     self.best_reward = 0
     self._saver = self._net._saver
+    self._idx2Regs = idx2regs
+    self._regs2idx = regs2idx
 
   def interact(self, ctx, env):
     print "start accept " + str(self._iter)
@@ -336,17 +381,25 @@ class PolicyGradientPlayer(grid.Player):
       return state, reward_map
 
   def choose(self, reward, filtered):
+      print "python: reward:"
       print reward
       actions = {} 
-      for i in range(255):
-          if reward.get(str(i)) == None:
-              filtered[i] = -1.0
-          else:
-              actions[i] = filtered[i]
-      print "actions result:"
-      print actions
+      for i in reward.keys():
+          if self._regs2idx.get(str(i)) == None:
+              print "regsiter unknown"
+              sys.exit(0)
+      for i in self._regs2idx.keys():  
+        if reward.get(str(i)) == None:
+          filtered[self._regs2idx[str(i)]] = -1.0 
+        else:
+          actions[i] = filtered[self._regs2idx[str(i)]]
 
-      return np.argmax(filtered)
+      print "python: actions result:"
+      print actions
+      idx = np.argmax(filtered)
+      action = self._idx2Regs[idx]
+      print "python: action is choose: " + str(action)
+      return action 
 
       
 

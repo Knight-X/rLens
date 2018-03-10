@@ -19,7 +19,7 @@ def fileToImage(state, iteration):
         minimum = slotstart - 10
     else:
         minimum = 0
-    arr = np.zeros((max(minimum + 1, 247), 247))
+    arr = np.zeros((max(slotend + 1, 247), 247))
     img = np.copy(arr)
 
     rewarddata = infile[2].split("&")
@@ -40,13 +40,13 @@ def fileToImage(state, iteration):
             arr.resize(slotend + 1, 247)
           #print "begin: " + line[x] + "end: " + line[x+1]
           for r in range(int(line[x]), int(line[x + 1]) + 1):
-            arr[r][int(line[0])] = 125
+            arr[r][int(line[0])] = 1
     for key in reward_dic:
         for sloti in range(slotstart, min(slotstart + 247, slotend)):
-            arr[sloti][int(key)] = 255 
+            arr[sloti][int(key)] = 2 
     for key in vreward_dic:
         for sloti in range(slotstart, min(slotstart + 247, slotend)):
-            arr[sloti][int(key)] = 200
+            arr[sloti][int(key)] = 3 
     res = np.split(arr, arr.shape[0])
     img = np.copy(res[minimum])
     black = np.zeros((1, 247))

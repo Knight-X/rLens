@@ -189,7 +189,7 @@ class PolicyGradientNetwork(object):
                             tf.ones_like(probability_histogram))
 
         
-        self.filtered = filtered
+        self.filtered = filtered 
         self.action_out = tf.argmin(self.action_softmax, 1)
 
         self.action_in = tf.placeholder(tf.int32, shape=[None, 1])
@@ -237,7 +237,7 @@ class PolicyGradientNetwork(object):
       An array of actions, 0 .. 4 and an array of array of
       probabilities.
     '''
-    return session.run([self.action_out, self.filtered],
+    return session.run([self.action_out, self.action_softmax],
                        feed_dict={self.state: states})
 
   def train(self, session, episodes):

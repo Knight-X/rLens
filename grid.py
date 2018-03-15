@@ -54,7 +54,13 @@ class Mission(object):
         self._driver.interact(self._context, self._env)
         self._was_in_terminal_state = self._env.in_terminal_state
 
-
+def gen(actionset):
+    idx2regs = [a for a in actionset]
+    idx2regs.sort()
+    regs2idx = {}
+    for i in range(len(idx2regs)):
+        regs2idx[idx2regs[i]] = i
+    return idx2regs, regs2idx
 def main():
   parser = argparse.ArgumentParser(description='Simple Reinforcement Learning.')
   group = parser.add_mutually_exclusive_group(required=True)
@@ -68,19 +74,22 @@ def main():
   args = parser.parse_args()
 
   ctx = context.Context()
+  sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+  sock.bind((HOST, PORT))
+  env = en.Environment()
+  rplayer = policy_gradient.RandomPlayer(sock)
+  actionset = rplayer.interact(env)
+  idx2regs, regs2idx = gen(actionset)
 
   if True:
     g = tf.Graph()
     s = tf.Session(graph=g)
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.bind((HOST, PORT))
-    player = policy_gradient.PolicyGradientPlayer(g, s, [247, 247], sock)
+    player = policy_gradient.PolicyGradientPlayer(g, s, [247, 247], sock, idx2regs, regs2idx)
     with g.as_default():
         init = tf.initialize_all_variables()
         s.run(init)
   else:
     sys.exit(1)
-  env = en.Environment()
 
   go = Mission(ctx, env, player)
   ctx.run_loop.post_task(go.step, repeat=True)

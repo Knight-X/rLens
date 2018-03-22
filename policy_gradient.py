@@ -23,6 +23,7 @@ import collections
 import subprocess
 import operator
 import time
+import compiler
 import os
 from shutil import copyfile
 import numpy as np
@@ -38,7 +39,7 @@ import parse
 _EMBEDDING_SIZE = 3
 _FEATURE_SIZE = 4
 
-_EXPERIENCE_BUFFER_SIZE = 6 
+_EXPERIENCE_BUFFER_SIZE = 4 
 
 
 chkpt_file = 'best_cnn.ckpt'
@@ -88,6 +89,7 @@ class PolicyGradientNetwork(object):
             name='embedding_lookup')
         embedding_lookup = tf.reshape(embedding_lookup,
                                       [-1, h, w, _EMBEDDING_SIZE])
+        self._embedding = embedding_lookup
 
         # First convolution.
         conv_1_out_channels = 27
@@ -171,42 +173,51 @@ class PolicyGradientNetwork(object):
             )
 
         # Logits, softmax, random sample.
-        connected_3 = tf.contrib.layers.fully_connected(
+        self.connected_3 = tf.contrib.layers.fully_connected(
             trainable=True,
             inputs=connected_2,
             num_outputs=_ACTION_SIZE,
-            activation_fn=tf.nn.sigmoid,
+            activation_fn=tf.nn.relu,
             weights_initializer=initializer,
             weights_regularizer=tf.contrib.layers.l2_regularizer(1.0),
             biases_initializer=initializer)
-        self.action_softmax = tf.nn.softmax(connected_3, name='action_softmax')
+        #self.action_softmax = tf.nn.softmax(connected_3, name='action_softmax')
 
         # Sum the components of the softmax
-        probability_histogram = tf.cumsum(self.action_softmax, axis=1)
-        sample = tf.random_uniform(tf.shape(probability_histogram)[:-1])
-        filtered = tf.where(probability_histogram >= sample,
-                            probability_histogram,
-                            tf.ones_like(probability_histogram))
+        #probability_histogram = tf.cumsum(self.action_softmax, axis=1)
+        #sample = tf.random_uniform(tf.shape(probability_histogram)[:-1])
+        #filtered = tf.where(probability_histogram <= sample,
+        #                    probability_histogram,
+        #                    tf.zeros_like(probability_histogram))
 
         
-        self.filtered = filtered 
-        self.action_out = tf.argmin(self.action_softmax, 1)
+        #self.filtered = filtered 
+        #self.action_out = tf.argmin(self.action_softmax, 1)
+#        self.action_filter = tf.placeholder(tf.int32, shape=[None, 1])
+        #self.action_out = tf.squeeze(tf.multinomial(connected_3, 1), axis=[1])
 
-        self.action_in = tf.placeholder(tf.int32, shape=[None, 1])
-        self.advantage = tf.placeholder(tf.float32, shape=[None, 1])
 
-        action_one_hot = tf.one_hot(self.action_in, _ACTION_SIZE,
-                                    dtype=tf.float32)
-        action_advantage = self.advantage * action_one_hot
-        loss_policy = -tf.reduce_mean(
-            tf.reduce_sum(tf.log(self.action_softmax) * action_advantage, 1),
-            name='loss_policy')
+        self.action_in = tf.placeholder(tf.int32, shape=[None])
+        self.advantage = tf.placeholder(tf.float32, shape=[None])
+
+        
+        #action_one_hot = tf.one_hot(self.action_in, _ACTION_SIZE,
+        #                            dtype=tf.float32)
+        #action_advantage = self.advantage * action_one_hot
+#        loss_policy = -tf.reduce_mean(
+#            tf.reduce_sum(tf.log(self.action_softmax) * action_advantage, 1),
+#            name='loss_policy')
+        sy_logprob_n = tf.nn.sparse_softmax_cross_entropy_with_logits(
+                        labels=self.action_in, 
+                        logits=self.connected_3)
+        self.check = sy_logprob_n
         # TODO: Investigate whether regularization losses are sums or
         # means and consider removing the division.
-        loss_regularization = (0.05 / tf.to_float(tf.shape(self.state)[0]) *
-            sum(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)))
-        self.loss = loss_policy + loss_regularization
-
+#        loss_regularization = (0.05 / tf.to_float(tf.shape(self.state)[0]) *
+#            sum(tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)))
+#        self.loss = loss_policy + loss_regularization
+        weighted_negative_likelihood = tf.multiply(sy_logprob_n, self.advantage)
+        self.loss = tf.reduce_mean(weighted_negative_likelihood)
         #tf.summary.scalar('loss_policy', loss_policy)
         #tf.summary.scalar('loss_regularization', loss_regularization)
 
@@ -218,7 +229,7 @@ class PolicyGradientNetwork(object):
         #learning_rate = tf.train.exponential_decay(initial_learning_rate,
         #                                           global_step=global_step,
         #                                           decay_steps=100000,decay_rate=0.96)
-        optimizer = tf.train.AdamOptimizer(learning_rate=0.0000625) #deepmind suggest 0.0000625
+        optimizer = tf.train.AdamOptimizer(learning_rate=5e-5) #deepmind suggest 0.0000625
         #optimizer = tf.train.AdamOptimizer(learning_rate=0.0000325) deepmind suggest 0.0000625
         self.update = optimizer.minimize(self.loss)
       self._saver = tf.train.Saver()
@@ -237,7 +248,7 @@ class PolicyGradientNetwork(object):
       An array of actions, 0 .. 4 and an array of array of
       probabilities.
     '''
-    return session.run([self.action_out, self.action_softmax],
+    return session.run([self.connected_3, self._embedding],
                        feed_dict={self.state: states})
 
   def train(self, session, episodes):
@@ -250,8 +261,8 @@ class PolicyGradientNetwork(object):
     '''
     size = sum(map(len, episodes))
     state = np.empty([size, self._h, self._w])
-    action_in = np.empty([size, 1])
-    advantage = np.empty([size, 1])
+    action_in = np.empty([size])
+    advantage = np.empty([size])
     i = 0
     print "start traing... batch_size: " + str(size)
     for episode in episodes:
@@ -259,15 +270,15 @@ class PolicyGradientNetwork(object):
       r = 0.0
       for step_state, action, reward in reversed(episode):
         state[i,:,:] = step_state
-        action_in[i,0] = action
+        action_in[i] = action
         #r = (reward / episode_size)+ 0.97 * r
-        r = reward + 0.97 * r
-        advantage[i,0] = r
+        r = reward + 1.0 * r
+        advantage[i] = r
         i += 1
     # Scale rewards to have zero mean, unit variance
     advantage = (advantage - np.mean(advantage)) / np.var(advantage)
 
-    return session.run([self.loss, self.update], feed_dict={
+    return session.run([self.update, self.loss, self.check, self.action_in, self.advantage], feed_dict={
         self.state: state,
         self.action_in: action_in,
         self.advantage: advantage
@@ -339,15 +350,21 @@ class PolicyGradientPlayer(grid.Player):
     print "start accept " + str(self._iter)
     conn, addr = self._sock.accept()
     data = conn.recv(1024)
+    reward = 0.0
     #terminal = env.in_terminal_state()
     if data[0] == 'e':
         terminal = True
+        time = compiler.compile()
+        reward = 200.0 - float(time)
+        a, b, c = self._experience[-1] 
+        self._experience[-1] = (a, b, float(reward))
+        self._totalr = reward
     else:
         terminal = False
     if terminal:
       self._experiences.append(self._experience)
       self._experience = []
-      summary, _ = self._net.train(self._session, self._experiences)
+      _, summary, check, action_in, adv = self._net.train(self._session, self._experiences)
       self._p = env.reset(self._p)
       self._iter = 1 
       if summary < 0.1 and self._totalr > self.best_reward:
@@ -368,7 +385,7 @@ class PolicyGradientPlayer(grid.Player):
       state, reward_map = self.getState(data)
       reward, action = self.doAction(state, reward_map, env)
       conn.send(str(action))
-      self._experience.append((state, action, float(reward)))
+      self._experience.append((state, self._regs2idx[str(action)], float(reward)))
       self._iter = self._iter + 1
       self._totalr = self._totalr + float(reward)
   def getState(self, data):
@@ -390,7 +407,7 @@ class PolicyGradientPlayer(grid.Player):
               sys.exit(0)
       for i in self._regs2idx.keys():  
         if reward.get(str(i)) == None:
-          filtered[self._regs2idx[str(i)]] = -1.0 
+          filtered[self._regs2idx[str(i)]] = -1.0
         else:
           actions[i] = filtered[self._regs2idx[str(i)]]
 
@@ -401,13 +418,37 @@ class PolicyGradientPlayer(grid.Player):
       print "python: action is choose: " + str(action)
       return action 
 
+  def among(self, distri, reward):
+      finalidx2reg = {}
+      index = 0
+      actions = []
+      for i in self._regs2idx.keys():
+          if reward.get(str(i)) != None:
+              actions.insert(index, distri[self._regs2idx[str(i)]])
+              finalidx2reg[str(index)] = i
+              index = index + 1
+      action = np.random.choice(index, 1, actions)
+      action = finalidx2reg[str(action[0])]
+      return action
+      
       
 
   def doAction(self, state, reward_map, env):
       res_action = 0
       reward = 0.0
-      [[action], [softmax]] = self._net.predict(self._session, [state])
-      action = self.choose(reward_map, softmax)
+      [distri], state_dec = self._net.predict(self._session, [state])
+      for i in range(247):
+          for xx in range(247):
+              if state[i][xx] == 1.0:
+                  print "1.0"
+                  print str(state_dec[0][i][xx])
+                  break
+              if state[i][xx] == 3.0:
+                  print "3.0"
+                  print str(state_dec[0][i][xx])
+                  break
+      action = self.among(distri, reward_map)
+      #action = self.choose(reward_map, softmax)
       env.act(action)
       res_action = action
       reward = reward_map[str(action)]

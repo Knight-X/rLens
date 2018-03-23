@@ -39,7 +39,7 @@ import parse
 _EMBEDDING_SIZE = 3
 _FEATURE_SIZE = 4
 
-_EXPERIENCE_BUFFER_SIZE = 4 
+_EXPERIENCE_BUFFER_SIZE = 6
 
 
 chkpt_file = 'best_cnn.ckpt'
@@ -76,126 +76,15 @@ class PolicyGradientNetwork(object):
     h, w = world_size_h_w
     self._h, self._w = h, w
     with graph.as_default():
-      initializer = tf.contrib.layers.xavier_initializer()
       with tf.variable_scope(name) as self.variables:
-        self.state = tf.placeholder(tf.int32, shape=[None, h, w])
-
-       # Input embedding
-        embedding = tf.get_variable(
-            'embedding', shape=[_FEATURE_SIZE, _EMBEDDING_SIZE],
-            initializer=initializer)
-        embedding_lookup = tf.nn.embedding_lookup(
-            embedding, tf.reshape(self.state, [-1, h * w]),
-            name='embedding_lookup')
-        embedding_lookup = tf.reshape(embedding_lookup,
-                                      [-1, h, w, _EMBEDDING_SIZE])
-        self._embedding = embedding_lookup
-
-        # First convolution.
-        conv_1_out_channels = 27
-        conv_1 = tf.contrib.layers.conv2d(
-            trainable=True,
-            inputs=embedding_lookup,
-            num_outputs=conv_1_out_channels,
-            kernel_size=[3, 3],
-            stride=1,
-            padding='SAME',
-            activation_fn=tf.nn.relu,
-            weights_initializer=tf.contrib.layers.xavier_initializer_conv2d(),
-            weights_regularizer=tf.contrib.layers.l2_regularizer(1.0),
-            # TODO: What's a good initializer for biases? Below too.
-            biases_initializer=initializer)
-
-        shrunk_h = h
-        shrunk_w = w
-
-        # Second convolution.
-        conv_2_out_channels = 50
-        conv_2_stride = 2
-        conv_2 = tf.contrib.layers.conv2d(
-            trainable=True,
-            inputs=conv_1,
-            num_outputs=conv_2_out_channels,
-            kernel_size=[5, 5],
-            stride=conv_2_stride,
-            padding='SAME',
-            activation_fn=tf.nn.relu,
-            weights_initializer=tf.contrib.layers.xavier_initializer_conv2d(),
-            weights_regularizer=tf.contrib.layers.l2_regularizer(1.0),
-            biases_initializer=initializer)
-        shrunk_h = (h + conv_2_stride - 1) // conv_2_stride
-        shrunk_w = (w + conv_2_stride - 1) // conv_2_stride
-
-        # Third convolution.
-        conv_3_out_channels = 100
-        conv_3_stride = 2
-        conv_3 = tf.contrib.layers.conv2d(
-            trainable=True,
-            inputs=conv_2,
-            num_outputs=conv_3_out_channels,
-            kernel_size=[5, 5],
-            stride=conv_3_stride,
-            padding='SAME',
-            activation_fn=tf.nn.relu,
-            weights_initializer=tf.contrib.layers.xavier_initializer_conv2d(),
-            weights_regularizer=tf.contrib.layers.l2_regularizer(1.0),
-            biases_initializer=initializer)
-        shrunk_h = (shrunk_h + conv_3_stride - 1) // conv_3_stride
-        shrunk_w = (shrunk_w + conv_3_stride - 1) // conv_3_stride
-
-        # Resupply the input at this point.
-        resupply = tf.concat([
-              tf.reshape(conv_3,
-                         [-1, shrunk_h * shrunk_w * conv_3_out_channels]),
-              tf.reshape(embedding_lookup, [-1, h * w * _EMBEDDING_SIZE])
-            ], 1, name='resupply')
-
-        # First fully connected layer.
-        connected_1 = tf.contrib.layers.fully_connected(
-            trainable=True,
-            inputs=resupply,
-            num_outputs=h+w,
-            activation_fn=tf.nn.relu,
-            weights_initializer=initializer,
-            weights_regularizer=tf.contrib.layers.l2_regularizer(1.0),
-            biases_initializer=initializer
-            )
-
-        # Second fully connected layer, steps down.
-        connected_2 = tf.contrib.layers.fully_connected(
-            trainable=True,
-            inputs=connected_1,
-            num_outputs=17,
-            activation_fn=tf.nn.relu,
-            weights_initializer=initializer,
-            weights_regularizer=tf.contrib.layers.l2_regularizer(1.0),
-            biases_initializer=initializer 
-            )
+        self.state = tf.placeholder(tf.float32, shape=[None, h * w])
 
         # Logits, softmax, random sample.
-        self.connected_3 = tf.contrib.layers.fully_connected(
-            trainable=True,
-            inputs=connected_2,
-            num_outputs=_ACTION_SIZE,
-            activation_fn=tf.nn.relu,
-            weights_initializer=initializer,
-            weights_regularizer=tf.contrib.layers.l2_regularizer(1.0),
-            biases_initializer=initializer)
-        #self.action_softmax = tf.nn.softmax(connected_3, name='action_softmax')
-
-        # Sum the components of the softmax
-        #probability_histogram = tf.cumsum(self.action_softmax, axis=1)
-        #sample = tf.random_uniform(tf.shape(probability_histogram)[:-1])
-        #filtered = tf.where(probability_histogram <= sample,
-        #                    probability_histogram,
-        #                    tf.zeros_like(probability_histogram))
-
-        
-        #self.filtered = filtered 
-        #self.action_out = tf.argmin(self.action_softmax, 1)
-#        self.action_filter = tf.placeholder(tf.int32, shape=[None, 1])
-        #self.action_out = tf.squeeze(tf.multinomial(connected_3, 1), axis=[1])
-
+        self.connected_3 = tf.layers.dense(
+            inputs=self.state,
+            units=_ACTION_SIZE,
+            activation=tf.nn.relu,
+        )
 
         self.action_in = tf.placeholder(tf.int32, shape=[None])
         self.advantage = tf.placeholder(tf.float32, shape=[None])
@@ -248,7 +137,7 @@ class PolicyGradientNetwork(object):
       An array of actions, 0 .. 4 and an array of array of
       probabilities.
     '''
-    return session.run([self.connected_3, self._embedding],
+    return session.run([self.connected_3, self.state],
                        feed_dict={self.state: states})
 
   def train(self, session, episodes):
@@ -260,7 +149,7 @@ class PolicyGradientNetwork(object):
           reward.
     '''
     size = sum(map(len, episodes))
-    state = np.empty([size, self._h, self._w])
+    state = np.empty([size, self._h * self._w])
     action_in = np.empty([size])
     advantage = np.empty([size])
     i = 0
@@ -269,7 +158,7 @@ class PolicyGradientNetwork(object):
       #episode_size = len(episode)
       r = 0.0
       for step_state, action, reward in reversed(episode):
-        state[i,:,:] = step_state
+        state[i,:] = step_state
         action_in[i] = action
         #r = (reward / episode_size)+ 0.97 * r
         r = reward + 1.0 * r
@@ -287,7 +176,7 @@ class PolicyGradientNetwork(object):
 class RandomPlayer:
   def __init__(self, sock):
     self._iter = 1
-    self._p = subprocess.Popen(['./llvm-reg/llvm/build/bin/llc', '-debug-only=regallocdl', '--regalloc=drl', 'add.ll', '-o', 'convba.s'],shell=False, stdout=subprocess.PIPE)
+    self._p = subprocess.Popen(['../llvm-reg/llvm/build/bin/llc', '-debug-only=regallocdl', '--regalloc=drl', 'add.ll', '-o', 'convba.s'],shell=False, stdout=subprocess.PIPE)
     self._sock = sock
     self._sock.listen(5)
 
@@ -335,7 +224,7 @@ class PolicyGradientPlayer(grid.Player):
     self._experiences = collections.deque([], _EXPERIENCE_BUFFER_SIZE)
     self._experience = []
     self._session = session
-    self._p = subprocess.Popen(['./llvm-reg/llvm/build/bin/llc', '-debug-only=regallocdl', '--regalloc=drl', 'add.ll', '-o', 'convba.s'],shell=False, stdout=subprocess.PIPE)
+    self._p = subprocess.Popen(['../llvm-reg/llvm/build/bin/llc', '-debug-only=regallocdl', '--regalloc=drl', 'add.ll', '-o', 'convba.s'],shell=False, stdout=subprocess.PIPE)
     self._iter = 1
     self._sock = sock
     self._sock.listen(5)
@@ -351,14 +240,14 @@ class PolicyGradientPlayer(grid.Player):
     conn, addr = self._sock.accept()
     data = conn.recv(1024)
     reward = 0.0
-    #terminal = env.in_terminal_state()
+    terminal = env.in_terminal_state()
     if data[0] == 'e':
         terminal = True
-        time = compiler.compile()
-        reward = 200.0 - float(time)
-        a, b, c = self._experience[-1] 
-        self._experience[-1] = (a, b, float(reward))
-        self._totalr = reward
+    #    time = compiler.compile()
+    #    reward = 200.0 - float(time)
+    #    a, b, c = self._experience[-1] 
+    #    self._experience[-1] = (a, b, float(reward))
+    #    self._totalr = reward
     else:
         terminal = False
     if terminal:
@@ -437,15 +326,14 @@ class PolicyGradientPlayer(grid.Player):
       res_action = 0
       reward = 0.0
       [distri], state_dec = self._net.predict(self._session, [state])
-      for i in range(247):
-          for xx in range(247):
-              if state[i][xx] == 1.0:
+      for i in range(247 * 247):
+              if state[i] == 255:
                   print "1.0"
-                  print str(state_dec[0][i][xx])
+                  print str(state_dec[0][i])
                   break
-              if state[i][xx] == 3.0:
+              if state[i] == 200:
                   print "3.0"
-                  print str(state_dec[0][i][xx])
+                  print str(state_dec[0][i])
                   break
       action = self.among(distri, reward_map)
       #action = self.choose(reward_map, softmax)

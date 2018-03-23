@@ -40,13 +40,13 @@ def fileToImage(state, iteration):
             arr.resize(slotend + 1, 247)
           #print "begin: " + line[x] + "end: " + line[x+1]
           for r in range(int(line[x]), int(line[x + 1]) + 1):
-            arr[r][int(line[0])] = 1
+            arr[r][int(line[0])] = 255 
     for key in reward_dic:
         for sloti in range(slotstart, min(slotstart + 247, slotend)):
-            arr[sloti][int(key)] = 2 
+            arr[sloti][int(key)] = 200 
     for key in vreward_dic:
         for sloti in range(slotstart, min(slotstart + 247, slotend)):
-            arr[sloti][int(key)] = 3 
+            arr[sloti][int(key)] = 100 
     res = np.split(arr, arr.shape[0])
     img = np.copy(res[minimum])
     black = np.zeros((1, 247))
@@ -61,6 +61,7 @@ def fileToImage(state, iteration):
     name = "filename" + str(iteration) + ".png"
     cv2.imwrite(name, img)
     reward_dic.update(vreward_dic)
+    img = img.flatten()
     return img, reward_dic, arr
 
 

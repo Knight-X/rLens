@@ -86,8 +86,8 @@ def main():
     s = tf.Session(graph=g)
     player = policy_gradient.PolicyGradientPlayer(g, s, [247, 247], sock, idx2regs, regs2idx)
     with g.as_default():
-        init = tf.initialize_all_variables()
-        s.run(init)
+      init = tf.global_variables_initializer()
+      s.run(init)
   else:
     sys.exit(1)
 

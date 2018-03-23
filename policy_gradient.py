@@ -224,120 +224,28 @@ class PolicyGradientPlayer(grid.Player):
     self._experiences = collections.deque([], _EXPERIENCE_BUFFER_SIZE)
     self._experience = []
     self._session = session
-    self._p = subprocess.Popen(['../llvm-reg/llvm/build/bin/llc', '-debug-only=regallocdl', '--regalloc=drl', 'add.ll', '-o', 'convba.s'],shell=False, stdout=subprocess.PIPE)
-    self._iter = 1
-    self._sock = sock
-    self._sock.listen(5)
-    self._totalr = 0.0
-    print "start listen"
-    self.best_reward = 0
     self._saver = self._net._saver
-    self._idx2Regs = idx2regs
-    self._regs2idx = regs2idx
 
   def interact(self, ctx, env):
-    print "start accept " + str(self._iter)
-    conn, addr = self._sock.accept()
-    data = conn.recv(1024)
-    reward = 0.0
-    terminal = env.in_terminal_state()
     if data[0] == 'e':
         terminal = True
-    #    time = compiler.compile()
-    #    reward = 200.0 - float(time)
-    #    a, b, c = self._experience[-1] 
-    #    self._experience[-1] = (a, b, float(reward))
-    #    self._totalr = reward
     else:
         terminal = False
     if terminal:
       self._experiences.append(self._experience)
       self._experience = []
       _, summary, check, action_in, adv = self._net.train(self._session, self._experiences)
-      self._p = env.reset(self._p)
+      play.reset()
       self._iter = 1 
-      if summary < 0.1 and self._totalr > self.best_reward:
-          self.best_reward = self._totalr
-          save_path = self._saver.save(self._session, chkpt_file)
-          with open("modelsave.txt", "a") as myfile:
-            con = "Model saved in file: " + save_path + "best_reward: " + str(self.best_reward)
-            myfile.write(con)
-            myfile.write("\n")
-      print "loss"
-      print summary
       with open("result3.txt", "a") as myfile:
           con = "loss: " + str(summary) + " score: " + str(self._totalr)
           myfile.write(con)
           myfile.write("\n")
       self._totalr = 0.0
     else:
-      state, reward_map = self.getState(data)
-      reward, action = self.doAction(state, reward_map, env)
-      conn.send(str(action))
+      [distri], state_dec = self._net.predict(self._session, [state])
+      action = self.among(distri, reward_map)
+      env.step(action)
       self._experience.append((state, self._regs2idx[str(action)], float(reward)))
       self._iter = self._iter + 1
       self._totalr = self._totalr + float(reward)
-  def getState(self, data):
-
-      data = struct.unpack("!i", data)[0]
-      if int(data) != self._iter:
-          print "c++ iter: " + data + " python iter: " + str(self._iter)
-          sys.exit(0)
-      state, reward_map, _ = parse.fileToImage("state.txt", self._iter)
-      return state, reward_map
-
-  def choose(self, reward, filtered):
-      print "python: reward:"
-      print reward
-      actions = {} 
-      for i in reward.keys():
-          if self._regs2idx.get(str(i)) == None:
-              print "regsiter unknown"
-              sys.exit(0)
-      for i in self._regs2idx.keys():  
-        if reward.get(str(i)) == None:
-          filtered[self._regs2idx[str(i)]] = -1.0
-        else:
-          actions[i] = filtered[self._regs2idx[str(i)]]
-
-      print "python: actions result:"
-      print actions
-      idx = np.argmax(filtered)
-      action = self._idx2Regs[idx]
-      print "python: action is choose: " + str(action)
-      return action 
-
-  def among(self, distri, reward):
-      finalidx2reg = {}
-      index = 0
-      actions = []
-      for i in self._regs2idx.keys():
-          if reward.get(str(i)) != None:
-              actions.insert(index, distri[self._regs2idx[str(i)]])
-              finalidx2reg[str(index)] = i
-              index = index + 1
-      action = np.random.choice(index, 1, actions)
-      action = finalidx2reg[str(action[0])]
-      return action
-      
-      
-
-  def doAction(self, state, reward_map, env):
-      res_action = 0
-      reward = 0.0
-      [distri], state_dec = self._net.predict(self._session, [state])
-      for i in range(247 * 247):
-              if state[i] == 255:
-                  print "1.0"
-                  print str(state_dec[0][i])
-                  break
-              if state[i] == 200:
-                  print "3.0"
-                  print str(state_dec[0][i])
-                  break
-      action = self.among(distri, reward_map)
-      #action = self.choose(reward_map, softmax)
-      env.act(action)
-      res_action = action
-      reward = reward_map[str(action)]
-      return reward, res_action 

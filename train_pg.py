@@ -7,10 +7,14 @@ import os
 import time
 import inspect
 from multiprocessing import Process
+import gym
 
 import socket
 HOST = '127.0.0.1'
 PORT = 1992
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.bind((HOST, PORT))
 #============================================================================================#
 # Utilities
 #============================================================================================#
@@ -59,7 +63,9 @@ def pathlength(path):
 # Policy Gradient
 #============================================================================================#
 
-def train_PG(env,
+def train_PG(
+            idx2regs,
+             regs2idx,
              height,
              weight,
              actionsize,
@@ -82,6 +88,7 @@ def train_PG(env,
              ):
 
     start = time.time()
+    #env = en.Gplayer(sock, idx2regs, regs2idx)
 
     # Configure output directory for logging
     logz.configure_output_dir(logdir)
@@ -97,13 +104,15 @@ def train_PG(env,
     np.random.seed(seed)
 
     # Make the gym environment
-    #env = gym.make(env_name)
+    env = gym.make(env_name)
     
     # Is this env continuous, or discrete?
-    discrete = True
+    #discrete = True
+    discrete = isinstance(env.action_space, gym.spaces.Discrete)
 
     # Maximum length for episodes
     max_path_length = max_path_length or env.spec.max_episode_steps
+    #max_path_length = 3333
 
     #========================================================================================#
     # Notes on notation:
@@ -123,8 +132,10 @@ def train_PG(env,
     #========================================================================================#
 
     # Observation and action sizes
-    ob_dim = height * weight 
-    ac_dim = actionsize
+    #ob_dim = height * weight 
+    #ac_dim = actionsize
+    ob_dim = env.observation_space.shape[0]
+    ac_dim = env.action_space.n if discrete else env.action_space.shape[0]
 
     #========================================================================================#
     #                           ----------SECTION 4----------
@@ -270,7 +281,8 @@ def train_PG(env,
         timesteps_this_batch = 0
         paths = []
         while True:
-            ob, reward_map = env.reset()
+            #ob, reward_map = env.reset()
+            ob = env.reset()
             obs, acs, rewards = [], [], []
             animate_this_episode=(len(paths)==0 and (itr % 10 == 0) and animate)
             steps = 0
@@ -279,13 +291,15 @@ def train_PG(env,
                     env.render()
                     time.sleep(0.05)
                 obs.append(ob)
-                dist = sess.run(sy_logits_na, feed_dict={sy_ob_no : ob[None]})
-                rew, action = env.among(dist, reward_map)
-                acs.append(action)
-                ob, done, _ = env.step(ac)
+                #[distri] = sess.run(sy_logits_na, feed_dict={sy_ob_no : ob[None]})
+                [ac] = sess.run(sy_sampled_ac, feed_dict={sy_ob_no : ob[None]})
+                #rew, action = env.among(distri, reward_map)
+                acs.append(ac)
+                #ob, done, reward_map = env.step(action)
+                ob, rew, done, _ = env.step(ac)
                 rewards.append(rew)
                 steps += 1
-                if done:
+                if done or steps > max_path_length:
                     break
             path = {"observation" : np.array(obs), 
                     "reward" : np.array(rewards), 
@@ -491,8 +505,6 @@ def main():
         os.makedirs(logdir)
 
     max_path_length = args.ep_len if args.ep_len > 0 else None
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.bind((HOST, PORT))
     rplayer = en.RandomPlayer(sock)
     actionset = rplayer.interact()
     idx2regs, regs2idx = gen(actionset)
@@ -501,9 +513,9 @@ def main():
         seed = args.seed + 10*e
         print('Running experiment with seed %d'%seed)
         def train_func():
-            env = en.Gplayer(sock, idx2regs, regs2idx)
             train_PG(
-                env,
+                idx2regs,
+                regs2idx,
                 247,
                 247,
                 len(idx2regs),
@@ -513,7 +525,7 @@ def main():
                 gamma=args.discount,
                 min_timesteps_per_batch=args.batch_size,
                 max_path_length=max_path_length,
-                learning_rate=args.learning_rate,
+                learning_rate=args.learning_rate, 
                 reward_to_go=args.reward_to_go,
                 animate=args.render,
                 logdir=os.path.join(logdir,'%d'%seed),
@@ -521,7 +533,7 @@ def main():
                 nn_baseline=args.nn_baseline, 
                 seed=seed,
                 n_layers=args.n_layers,
-                size=args.size,
+                size=args.size
                 )
         # Awkward hacky process runs, because Tensorflow does not like
         # repeatedly calling train_PG in the same thread.

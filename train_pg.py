@@ -88,7 +88,7 @@ def train_PG(
              ):
 
     start = time.time()
-    #env = en.Gplayer(sock, idx2regs, regs2idx)
+    env = en.Gplayer(sock, idx2regs, regs2idx)
 
     # Configure output directory for logging
     logz.configure_output_dir(logdir)
@@ -104,15 +104,15 @@ def train_PG(
     np.random.seed(seed)
 
     # Make the gym environment
-    env = gym.make(env_name)
+    #env = gym.make(env_name)
     
     # Is this env continuous, or discrete?
-    #discrete = True
-    discrete = isinstance(env.action_space, gym.spaces.Discrete)
+    discrete = True
+    #discrete = isinstance(env.action_space, gym.spaces.Discrete)
 
     # Maximum length for episodes
-    max_path_length = max_path_length or env.spec.max_episode_steps
-    #max_path_length = 3333
+    #max_path_length = max_path_length or env.spec.max_episode_steps
+    max_path_length = 3333
 
     #========================================================================================#
     # Notes on notation:
@@ -132,10 +132,10 @@ def train_PG(
     #========================================================================================#
 
     # Observation and action sizes
-    #ob_dim = height * weight 
-    #ac_dim = actionsize
-    ob_dim = env.observation_space.shape[0]
-    ac_dim = env.action_space.n if discrete else env.action_space.shape[0]
+    ob_dim = height * weight 
+    ac_dim = actionsize
+    #ob_dim = env.observation_space.shape[0]
+    #ac_dim = env.action_space.n if discrete else env.action_space.shape[0]
 
     #========================================================================================#
     #                           ----------SECTION 4----------
@@ -204,6 +204,7 @@ def train_PG(
             activation=tf.nn.relu)
 
         sy_sampled_ac = tf.squeeze(tf.multinomial(sy_logits_na, 1), axis=[1]) # Hint: Use the tf.multinomial op
+        sy_soft = tf.nn.softmax(sy_logits_na) # Hint: Use the tf.multinomial op
         sy_logprob_n = tf.nn.sparse_softmax_cross_entropy_with_logits(
             labels=sy_ac_na,
             logits=sy_logits_na)
@@ -281,8 +282,8 @@ def train_PG(
         timesteps_this_batch = 0
         paths = []
         while True:
-            #ob, reward_map = env.reset()
-            ob = env.reset()
+            ob, reward_map = env.reset()
+            #ob = env.reset()
             obs, acs, rewards = [], [], []
             animate_this_episode=(len(paths)==0 and (itr % 10 == 0) and animate)
             steps = 0
@@ -291,13 +292,15 @@ def train_PG(
                     env.render()
                     time.sleep(0.05)
                 obs.append(ob)
-                #[distri] = sess.run(sy_logits_na, feed_dict={sy_ob_no : ob[None]})
-                [ac] = sess.run(sy_sampled_ac, feed_dict={sy_ob_no : ob[None]})
-                #rew, action = env.among(distri, reward_map)
-                acs.append(ac)
-                #ob, done, reward_map = env.step(action)
-                ob, rew, done, _ = env.step(ac)
+                [distri], acc = sess.run([sy_logits_na, sy_sampled_ac], feed_dict={sy_ob_no : ob[None]})
+                #[distri, acc, bution] = sess.run([sy_logits_na, sy_sampled_ac, distribution], feed_dict={sy_ob_no : ob[None]})
+                #ac = en.among(distri, acc[0])
+                rew, action = env.among(distri, reward_map, acc[0])
+                acs.append(action)
                 rewards.append(rew)
+
+                ob, done, reward_map = env.step(action)
+                #ob, rew, done, _ = env.step(ac)
                 steps += 1
                 if done or steps > max_path_length:
                     break
@@ -306,6 +309,7 @@ def train_PG(
                     "action" : np.array(acs)}
             paths.append(path)
             timesteps_this_batch += pathlength(path)
+            print str(timesteps_this_batch) + "go"
             if timesteps_this_batch > min_timesteps_per_batch:
                 break
         total_timesteps += timesteps_this_batch

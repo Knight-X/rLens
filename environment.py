@@ -123,10 +123,15 @@ class Gplayer:
     state, reward_map, _ = parse.fileToImage("state.txt", self._iter)
     return state, reward_map
 
-  def among(self, distri, reward_map, ac):
-    if reward_map.get(str(ac)) != None:
+  def among(self, distri, reward_map, ac, valid):
+    if valid and reward_map.get(str(ac)) != None:
         reward = reward_map[str(ac)]
-        return int(reward), ac
+        return int(reward), ac, True
+    elif valid and reward_map.get(str(ac)) == None:
+        return -10, ac, False
+    elif not valid and reward_map.get(str(ac)) != None:
+        reward = reward_map[str(ac)]
+        return int(reward), ac, True
     finalidx2reg = {}
     index = 0
     actions = [] 
@@ -135,14 +140,14 @@ class Gplayer:
             actions.insert(index, distri[self._regs2idx[str(i)]])
             finalidx2reg[str(index)] = i
             index = index + 1   
-    if random.random() < 0.5:
+    if random.random() < 0.05:
       action = np.random.choice(index, 1, actions)
       action = action[0]
     else:
       action = np.argmax(np.array(actions))
     action = finalidx2reg[str(action)]
     reward = reward_map[str(action)]
-    return int(reward), action
+    return int(reward), action, True
 
 def among(distri, ac, valid):
     reward_map = {"1": 3, "0": 5}

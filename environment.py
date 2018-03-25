@@ -128,7 +128,7 @@ class Gplayer:
         reward = reward_map[str(ac)]
         return int(reward), ac, True
     elif valid and reward_map.get(str(ac)) == None:
-        return -10, ac, False
+        return -0.5, ac, False
     elif not valid and reward_map.get(str(ac)) != None:
         reward = reward_map[str(ac)]
         return int(reward), ac, True
@@ -141,10 +141,14 @@ class Gplayer:
             finalidx2reg[str(index)] = i
             index = index + 1   
     if random.random() < 0.05:
-      action = np.random.choice(index, 1, actions)
+      actions = softmax(actions)
+      action = np.random.choice(index, 1)
       action = action[0]
     else:
-      action = np.argmax(np.array(actions))
+      actions = softmax(actions)
+      action = np.random.choice(index, 1, p=actions)
+      action = action[0]
+      #action = np.argmax(np.array(actions))
     action = finalidx2reg[str(action)]
     reward = reward_map[str(action)]
     return int(reward), action, True

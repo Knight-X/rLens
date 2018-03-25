@@ -469,6 +469,7 @@ def train_PG(
         logz.log_tabular("Time", time.time() - start)
         logz.log_tabular("Iteration", itr)
         logz.log_tabular("AverageReturn", np.mean(returns))
+        logz.log_tabular("Loss", loss_value)
         logz.log_tabular("StdReturn", np.std(returns))
         logz.log_tabular("MaxReturn", np.max(returns))
         logz.log_tabular("MinReturn", np.min(returns))

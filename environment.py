@@ -158,8 +158,15 @@ def among(distri, ac, valid):
     for i in range(index):
         actions.append(distri[0][i])
     #if random.random() < 0.0005:
-    #  action = np.random.choice(index, 1, actions)
-    #  action = action[0]
+    actions = softmax(actions)
+    action = np.random.choice(index, 1, p=actions)
+    action = action[0]
     #else:
-    action = np.argmax(np.array(actions))
+    #action = np.argmax(np.array(actions))
     return action, True
+
+def softmax(x):
+    x = x - np.max(x)
+    exp_x = np.exp(x)
+    softmax_x = exp_x / np.sum(exp_x)
+    return softmax_x

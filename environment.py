@@ -145,9 +145,16 @@ class Gplayer:
     return int(reward), action
 
 def among(distri, ac):
-    index = distri.size
+    reward_map = {"1": 3, "0": 5}
+    if reward_map.get(str(ac)) != None:
+        return ac
+    index = 2 
     actions = []
     for i in range(index):
         actions.append(distri[0][i])
-    action = np.random.choice(index, 1, actions)
-    return ac
+    if random.random() < 0.05:
+      action = np.random.choice(index, 1, actions)
+      action = action[0]
+    else:
+      action = np.argmax(np.array(actions))
+    return action

@@ -287,6 +287,7 @@ def train_PG(
             obs, acs, rewards = [], [], []
             animate_this_episode=(len(paths)==0 and (itr % 10 == 0) and animate)
             steps = 0
+            valid = True 
             while True:
                 if animate_this_episode:
                     env.render()
@@ -294,9 +295,14 @@ def train_PG(
                 obs.append(ob)
                 #[distri], acc = sess.run([sy_logits_na, sy_sampled_ac], feed_dict={sy_ob_no : ob[None]})
                 [distri, acc] = sess.run([sy_soft, sy_sampled_ac], feed_dict={sy_ob_no : ob[None]})
-                ac = en.among(distri, acc[0])
+                ac, valid = en.among(distri, acc[0], valid)
                 #rew, action = env.among(distri, reward_map, acc[0])
                 acs.append(ac)
+                if valid == False:
+                  steps += 1
+                  rew = -0.01
+                  rewards.append(rew)
+                  continue
 
                 #ob, done, reward_map = env.step(action)
                 ob, rew, done, _ = env.step(ac)

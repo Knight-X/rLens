@@ -144,17 +144,22 @@ class Gplayer:
     reward = reward_map[str(action)]
     return int(reward), action
 
-def among(distri, ac):
+def among(distri, ac, valid):
     reward_map = {"1": 3, "0": 5}
-    if reward_map.get(str(ac)) != None:
-        return ac
+    if valid and reward_map.get(str(ac)) != None:
+        return ac, True
+    elif valid and reward_map.get(str(ac)) == None:
+        return ac, False
+    elif not valid and reward_map.get(str(ac)) != None:
+        return ac, True
+    
     index = 2 
     actions = []
     for i in range(index):
         actions.append(distri[0][i])
-    if random.random() < 0.05:
-      action = np.random.choice(index, 1, actions)
-      action = action[0]
-    else:
-      action = np.argmax(np.array(actions))
-    return action
+    #if random.random() < 0.0005:
+    #  action = np.random.choice(index, 1, actions)
+    #  action = action[0]
+    #else:
+    action = np.argmax(np.array(actions))
+    return action, True

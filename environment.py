@@ -105,6 +105,7 @@ class Gplayer:
 
   def step(self, action):
     reward = 0.0
+    action = self._idx2Regs[action]
     self._conn.send(str(action))
     self._iter = self._iter + 1
     self._conn, addr = self._sock.accept()
@@ -124,13 +125,17 @@ class Gplayer:
     return state, reward_map
 
   def among(self, distri, reward_map, ac, valid):
+    ac = self._idx2Regs[ac]
     if valid and reward_map.get(str(ac)) != None:
         reward = reward_map[str(ac)]
+        ac = self._regs2idx[str(ac)]
         return int(reward), ac, True
     elif valid and reward_map.get(str(ac)) == None:
+        ac = self._regs2idx[str(ac)]
         return -0.5, ac, False
     elif not valid and reward_map.get(str(ac)) != None:
         reward = reward_map[str(ac)]
+        ac = self._regs2idx[str(ac)]
         return int(reward), ac, True
     finalidx2reg = {}
     index = 0
@@ -151,6 +156,7 @@ class Gplayer:
       #action = np.argmax(np.array(actions))
     action = finalidx2reg[str(action)]
     reward = reward_map[str(action)]
+    action = self._regs2idx[str(action)]
     return int(reward), action, True
 
 def among(distri, ac, valid):

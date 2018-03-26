@@ -75,7 +75,7 @@ def train_PG(
              gamma=1.0, 
              min_timesteps_per_batch=1000, 
              max_path_length=None,
-             learning_rate=5e-3, 
+             learning_rate=5e-3,
              reward_to_go=True, 
              animate=True, 
              logdir=None, 
@@ -205,10 +205,11 @@ def train_PG(
 
         sy_sampled_ac = tf.squeeze(tf.multinomial(sy_logits_na, 1), axis=[1]) # Hint: Use the tf.multinomial op
         sy_soft = tf.nn.softmax(sy_logits_na) # Hint: Use the tf.multinomial op
-        sy_logprob_n = tf.nn.sparse_softmax_cross_entropy_with_logits(
-            labels=sy_ac_na,
-            logits=sy_logits_na)
-
+        #sy_logprob_n = tf.nn.sparse_softmax_cross_entropy_with_logits(
+        #    labels=sy_ac_na,
+        #    logits=sy_logits_na)
+        action_one_hot = tf.one_hot(sy_ac_na, actionsize, dtype=tf.float32)
+        sy_logprob_n = -tf.reduce_sum(action_one_hot * tf.log(tf.nn.softmax(sy_logits_na) + 1e-10))
     else:
         # YOUR_CODE_HERE
         sy_mean  = build_mlp(

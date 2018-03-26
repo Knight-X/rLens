@@ -140,14 +140,14 @@ class Gplayer:
             actions.insert(index, distri[self._regs2idx[str(i)]])
             finalidx2reg[str(index)] = i
             index = index + 1   
-    if random.random() < 0.05:
-      actions = softmax(actions)
-      action = np.random.choice(index, 1)
-      action = action[0]
-    else:
-      actions = softmax(actions)
-      action = np.random.choice(index, 1, p=actions)
-      action = action[0]
+    #if random.random() < 0.05:
+    actions = softmax(actions)
+    action = np.random.choice(index, 1)
+    action = action[0]
+    #else:
+    #  actions = softmax(actions)
+    #  action = np.random.choice(index, 1, p=actions)
+    #  action = action[0]
       #action = np.argmax(np.array(actions))
     action = finalidx2reg[str(action)]
     reward = reward_map[str(action)]

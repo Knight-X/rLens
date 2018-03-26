@@ -42,6 +42,7 @@ class RandomPlayer:
   def interact(self):
     terminal = False
     actions = set()
+    maxlength = 0
     while (terminal == False):
       print "start accept " + str(self._iter)
       conn, addr = self._sock.accept()
@@ -49,7 +50,8 @@ class RandomPlayer:
       if (data[0] == 'e'):
         terminal = True
         break
-      reward_map = self.getState(data)
+      reward_map, slotend = self.getState(data)
+      maxlength = max(slotend, maxlength)
       action = self.doAction(reward_map)
       conn.send(str(action))
       self._iter = self._iter + 1
@@ -59,7 +61,7 @@ class RandomPlayer:
     self._iter = 1 
     self._totalr = 0.0
     self.terminate()
-    return actions 
+    return actions, maxlength
 
   def getState(self, data):
 
@@ -67,8 +69,8 @@ class RandomPlayer:
       if int(data) != self._iter:
           print "c++ iter: " + data + " python iter: " + str(self._iter)
           sys.exit(0)
-      state, reward_map, _ = parse.fileToImage("state.txt", self._iter)
-      return reward_map
+      state, reward_map, maxlength, _ = parse.fileToImage("state.txt", self._iter)
+      return reward_map, maxlength
 
   def doAction(self, reward_map):
       action = reward_map.keys()[0]
@@ -79,13 +81,15 @@ class RandomPlayer:
     print "process finish"
 
 class Gplayer:
-  def __init__(self, sock, idx2regs, regs2idx):
+  def __init__(self, sock, idx2regs, regs2idx, maxlength):
     self._sock = sock
     self._sock.listen(5)
     self._iter = 1
     self._totalr = 0.0
     self._idx2Regs = idx2regs
     self._regs2idx = regs2idx
+    self._maxlength = maxlength + 1
+    self._actionsize = len(idx2regs)
     self.best_reward = 0
     self.process_init = False
 
@@ -121,7 +125,7 @@ class Gplayer:
     if int(data) != self._iter:
       print "c++ iter: " + data + " python iter: " + str(self._iter)
       sys.exit(0)
-    state, reward_map, _ = parse.fileToImage("state.txt", self._iter)
+    state, reward_map = parse.getstate("state.txt", self._iter, self._maxlength, self._actionsize, self._regs2idx)
     return state, reward_map
 
   def among(self, distri, reward_map, ac, valid):

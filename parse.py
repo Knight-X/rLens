@@ -15,6 +15,7 @@ def fileToImage(state, iteration):
     slotstart = int(vreg[1])
     slotend = int(vreg[2])
     minimum = slotstart 
+    maxmum = slotend
     if slotstart >= 10:
         minimum = slotstart - 10
     else:
@@ -62,33 +63,57 @@ def fileToImage(state, iteration):
     cv2.imwrite(name, img)
     reward_dic.update(vreward_dic)
     img = img.flatten()
-    return img, reward_dic, arr
+    return img, reward_dic, maxmum, arr
 
+def physicalre(a, reward_dic, ratio, actionsize, slotstart, slotend, g):
+    for key in reward_dic:
+        for j in range(actionsize):
+            if j * ratio <= slotstart < (j + 1) * ratio or j * ratio <= slotend < (j + 1) * ratio:
+                if a[j][g[str(key)]] == 125:
+                    a[j][g[str(key)]] = 175
+                else:
+                    a[j][g[str(key)]] = 255
 
-""" for i in range(100, 101):
-  name = "go" + str(i) + ".txt"
-  print name
-  infile = open(name, "r").readlines()
-  arr = np.zeros((247, 247))
-  minimum = 999999 
-  for index in range(0, len(infile)):
-    line = infile[index].split("&")
-    print "firstline: " + line[0]
-    for x in range(1, len(line), 2):
-      if int(line[x]) > len(arr) or int(line[x + 1]) > len(arr):
-          arr.resize((int(line[x + 1]) + 1, 247))
-      if int(line[x]) < minimum:
-          minimum = int(line[x])
-      print "begin: " + line[x] + "end: " + line[x+1]
-      for r in range(int(line[x]), int(line[x + 1]) + 1):
-          arr[r][int(line[0])] = 255
-  res = np.split(arr, arr.shape[0])
-  img = res[minimum]
-  black = np.zeros((1, 247))
-  if minimum + 247 > len(res):
-    for tmp in range(len(res), minimum + 247):
-      res.append(black)
-  for sub in range(minimum + 1, minimum + 247):
-      img = np.concatenate((img, res[sub]), axis=0)
-  
-  cv2.imwrite("filename.png", img)"""
+def vrreward(a, vreward_dic, ratio, actionsize, slotstart, slotend, g):
+    for key in vreward_dic:
+        for j in range(actionsize):
+            if j * ratio <= slotstart < (j + 1) * ratio or j * ratio <= slotend < (j + 1) * ratio:
+                if a[j][g[str(key)]] != 125 and int(key) != 0:
+                    a[j][g[str(key)]] = 75
+
+def getstate(state, iteration, maxlength, actionsize, reg2idx):
+    infile = open(state, "r").readlines()                  
+    vreg = infile[0].split("&")
+    slotstart = int(vreg[1])
+    slotend = int(vreg[2]) 
+    if maxlength % actionsize == 0:
+        ratio = maxlength / actionsize
+    else:                  
+        ratio = (maxlength / actionsize) + 1
+    rewarddata = infile[2].split("&")
+    reward_dic = outputdict(rewarddata)
+    vrewarddata = infile[4].split("&")
+    vreward_dic = outputdict(vrewarddata)
+    a = np.zeros((actionsize, actionsize))
+                           
+    for index in range(5, len(infile)):
+        line = infile[index].split("&")
+        if line[0] == "reward\n" or line[0] == "3333":
+            continue;            
+        reg = line[0]
+        if reg2idx.get(str(reg)) == None:
+            continue
+        for x in range(1, len(line), 2):
+            start = int(line[x])
+            end = int(line[x + 1])
+            for timeslot in range(actionsize):
+                if (timeslot * ratio <= start < (timeslot + 1) * ratio) or (timeslot * ratio <= end < (timeslot + 1) * ratio):
+                    a[timeslot][reg2idx[str(reg)]] = 125
+                elif end > actionsize * ratio:
+                    print "wrong"
+                    sys.exit(0)
+    physicalre(a, reward_dic, ratio, actionsize, slotstart, slotend, reg2idx)
+    vrreward(a, vreward_dic, ratio, actionsize, slotstart, slotend, reg2idx)
+    reward_dic.update(vreward_dic)
+    a = a.flatten()
+    return a, reward_dic

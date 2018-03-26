@@ -64,6 +64,7 @@ def pathlength(path):
 #============================================================================================#
 
 def train_PG(
+            maxlength,
             idx2regs,
              regs2idx,
              height,
@@ -104,7 +105,7 @@ def train_PG(
 
     # Make the gym environment
     #env = gym.make(env_name)
-    env = en.Gplayer(sock, idx2regs, regs2idx)
+    env = en.Gplayer(sock, idx2regs, regs2idx, maxlength)
     
     # Is this env continuous, or discrete?
     discrete = True
@@ -132,7 +133,7 @@ def train_PG(
     #========================================================================================#
 
     # Observation and action sizes
-    ob_dim = height * weight 
+    ob_dim = actionsize * actionsize 
     ac_dim = actionsize
     #ob_dim = env.observation_space.shape[0]
     #ac_dim = env.action_space.n if discrete else env.action_space.shape[0]
@@ -516,7 +517,7 @@ def main():
 
     max_path_length = args.ep_len if args.ep_len > 0 else None
     rplayer = en.RandomPlayer(sock)
-    actionset = rplayer.interact()
+    actionset, maxlength = rplayer.interact()
     idx2regs, regs2idx = gen(actionset)
 
     for e in range(args.n_experiments):
@@ -524,6 +525,7 @@ def main():
         print('Running experiment with seed %d'%seed)
         def train_func():
             train_PG(
+                maxlength,
                 idx2regs,
                 regs2idx,
                 247,

@@ -76,7 +76,7 @@ def train_PG(
              gamma=1.0, 
              min_timesteps_per_batch=1000, 
              max_path_length=None,
-             learning_rate=5e-4,
+             learning_rate=0.00000625,
              reward_to_go=True, 
              animate=True, 
              logdir=None, 

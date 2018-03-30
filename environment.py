@@ -109,6 +109,10 @@ class Gplayer:
 
   def step(self, action):
     reward = 0.0
+    name = "./data/log/action" + str(self._iter) + ".txt"
+    f = open(name, "w")
+    f.write(str(action))
+    f.close()
     action = self._idx2Regs[action]
     self._conn.send(str(action))
     self._iter = self._iter + 1

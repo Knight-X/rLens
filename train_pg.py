@@ -47,6 +47,7 @@ def build_mlp(
                 inputs=dense,
                 units=size,
                 activation=activation)
+            size = size / 2
         return tf.layers.dense(
             inputs=dense,
             units=output_size,
@@ -76,7 +77,7 @@ def train_PG(
              gamma=1.0, 
              min_timesteps_per_batch=1000, 
              max_path_length=None,
-             learning_rate=0.00000625,
+             learning_rate=0.000000625,
              reward_to_go=True, 
              animate=True, 
              logdir=None, 
@@ -498,14 +499,14 @@ def main():
     parser.add_argument('--n_iter', '-n', type=int, default=100)
     parser.add_argument('--batch_size', '-b', type=int, default=1000)
     parser.add_argument('--ep_len', '-ep', type=float, default=-1.)
-    parser.add_argument('--learning_rate', '-lr', type=float, default=0.0000625)
+    parser.add_argument('--learning_rate', '-lr', type=float, default=0.00000625)
     parser.add_argument('--reward_to_go', '-rtg', action='store_true')
     parser.add_argument('--dont_normalize_advantages', '-dna', action='store_true')
     parser.add_argument('--nn_baseline', '-bl', action='store_true')
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--n_experiments', '-e', type=int, default=1)
-    parser.add_argument('--n_layers', '-l', type=int, default=1)
-    parser.add_argument('--size', '-s', type=int, default=32)
+    parser.add_argument('--n_layers', '-l', type=int, default=2)
+    parser.add_argument('--size', '-s', type=int, default=128)
     args = parser.parse_args()
 
     if not(os.path.exists('data')):
@@ -519,6 +520,10 @@ def main():
     rplayer = en.RandomPlayer(sock)
     actionset, maxlength = rplayer.interact()
     idx2regs, regs2idx = gen(actionset)
+    name = "./data/log/register maping.txt"
+    f = open(name, "w")
+    f.write(str(regs2idx))
+    f.close()
 
     for e in range(args.n_experiments):
         seed = args.seed + 10*e

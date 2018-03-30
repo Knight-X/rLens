@@ -95,7 +95,7 @@ class Gplayer:
 
   def terprocess(self):
       print "terminal the process in python"
-      self._p.terminate()
+      #self._p.terminate()
       self._p.wait()
 
   def reset(self):

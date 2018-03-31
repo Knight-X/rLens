@@ -1,4 +1,7 @@
 from subprocess import call
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 import cv2
 import numpy as np
 from skimage.transform import resize
@@ -31,39 +34,39 @@ def fileToImage(state, iteration):
 
     vrewarddata = infile[4].split("&")
     vreward_dic = outputdict(vrewarddata)
-    for index in range(5, len(infile)):
-        line = infile[index].split("&")
-        if line[0] == "reward\n" or line[0] == "3333":
-            continue;
+    #for index in range(5, len(infile)):
+    #    line = infile[index].split("&")
+    #    if line[0] == "reward\n" or line[0] == "3333":
+    #        continue;
 
         #print "firstline: " + line[0]
-        for x in range(1, len(line), 2):
-          if int(line[x]) > len(arr) or int(line[x + 1]) > len(arr):
-            arr.resize((int(line[x + 1]) + 1, 247))
-          if slotstart > len(arr) or slotend > len(arr):
-            arr.resize(slotend + 1, 247)
+    #    for x in range(1, len(line), 2):
+    #      if int(line[x]) > len(arr) or int(line[x + 1]) > len(arr):
+    #        arr.resize((int(line[x + 1]) + 1, 247))
+    #      if slotstart > len(arr) or slotend > len(arr):
+    #        arr.resize(slotend + 1, 247)
           #print "begin: " + line[x] + "end: " + line[x+1]
-          for r in range(int(line[x]), int(line[x + 1]) + 1):
-            arr[r][int(line[0])] = 255 
-    for key in reward_dic:
-        for sloti in range(slotstart, min(slotstart + 247, slotend)):
-            arr[sloti][int(key)] = 200 
-    for key in vreward_dic:
-        for sloti in range(slotstart, min(slotstart + 247, slotend)):
-            arr[sloti][int(key)] = 100 
-    res = np.split(arr, arr.shape[0])
-    img = np.copy(res[minimum])
-    black = np.zeros((1, 247))
-    if minimum + 247 > len(res):
-      for tmp in range(len(res), minimum + 247):
-        res.append(black)
-    for sub in range(minimum + 1, minimum + 247):
-      img = np.concatenate((img, res[sub]), axis=0)
-    shape = img.shape
-    if shape[0] != 247 and shape[1] != 247:
-        print "dim wrong"
-    name = "filename" + str(iteration) + ".png"
-    cv2.imwrite(name, img)
+    #      for r in range(int(line[x]), int(line[x + 1]) + 1):
+    #        arr[r][int(line[0])] = 255 
+    #for key in reward_dic:
+    #    for sloti in range(slotstart, min(slotstart + 247, slotend)):
+    #        arr[sloti][int(key)] = 200 
+    #for key in vreward_dic:
+    #    for sloti in range(slotstart, min(slotstart + 247, slotend)):
+    #        arr[sloti][int(key)] = 100 
+    #res = np.split(arr, arr.shape[0])
+    #img = np.copy(res[minimum])
+    #black = np.zeros((1, 247))
+    #if minimum + 247 > len(res):
+    #  for tmp in range(len(res), minimum + 247):
+    #    res.append(black)
+    #for sub in range(minimum + 1, minimum + 247):
+    #  img = np.concatenate((img, res[sub]), axis=0)
+    #shape = img.shape
+    #if shape[0] != 247 and shape[1] != 247:
+    #    print "dim wrong"
+    #name = "filename" + str(iteration) + ".png"
+    #cv2.imwrite(name, img)
     reward_dic.update(vreward_dic)
     img = img.flatten()
     return img, reward_dic, maxmum, arr
@@ -84,7 +87,7 @@ def vrreward(a, vreward_dic, ratio, actionsize, slotstart, slotend, g):
                 else:
                     a[j][g[str(key)]] = 75
 
-def getstate(state, iteration, maxlength, actionsize, reg2idx):
+def getstate(state, iteration, maxlength, actionsize, reg2idx, tofile):
     directory = "./data/log"
     infile = open(state, "r").readlines()                  
     vreg = infile[0].split("&")
@@ -120,12 +123,16 @@ def getstate(state, iteration, maxlength, actionsize, reg2idx):
     vrreward(a, vreward_dic, ratio, actionsize, slotstart, slotend, reg2idx)
     if not os.path.exists(directory):
         os.makedirs(directory) 
-    name = "./data/log/filename" + str(iteration) + ".png"
+    if tofile:
+        name = "./data/log/filename" + str(iteration) + ".png"
+        plt.imshow(a, interpolation='nearest')
+        plt.xticks(np.arange(0.0, 45, 1), np.arange(0, 45, 5))
+        plt.yticks(np.arange(0.0, 45, 1), np.arange(0, 45, 5))
+        plt.savefig(name)
     filename = "./data/log/filename" + str(iteration) + ".txt"
-    cv2.imwrite(name, a)
     copy2(state, filename)
     reward_dic.update(vreward_dic)
-    a = a.flatten()
-    return a, reward_dic
+    s = a.flatten()
+    return s, reward_dic, a
 
 

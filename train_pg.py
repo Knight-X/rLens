@@ -87,6 +87,7 @@ def train_PG(
              # network arguments
              n_layers=1,
              size=32,
+             tofile=False,
              ):
 
     start = time.time()
@@ -106,7 +107,7 @@ def train_PG(
 
     # Make the gym environment
     #env = gym.make(env_name)
-    env = en.Gplayer(sock, idx2regs, regs2idx, maxlength)
+    env = en.Gplayer(sock, idx2regs, regs2idx, maxlength, tofile)
     
     # Is this env continuous, or discrete?
     discrete = True
@@ -550,7 +551,8 @@ def main():
                 nn_baseline=args.nn_baseline, 
                 seed=seed,
                 n_layers=args.n_layers,
-                size=args.size
+                size=args.size,
+                tofile=False
                 )
         # Awkward hacky process runs, because Tensorflow does not like
         # repeatedly calling train_PG in the same thread.

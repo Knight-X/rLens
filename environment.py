@@ -81,7 +81,7 @@ class RandomPlayer:
     print "process finish"
 
 class Gplayer:
-  def __init__(self, sock, idx2regs, regs2idx, maxlength):
+  def __init__(self, sock, idx2regs, regs2idx, maxlength, tofile):
     self._sock = sock
     self._sock.listen(5)
     self._iter = 1
@@ -92,6 +92,7 @@ class Gplayer:
     self._actionsize = len(idx2regs)
     self.best_reward = 0
     self.process_init = False
+    self._tofile = tofile
 
   def terprocess(self):
       print "terminal the process in python"
@@ -129,7 +130,7 @@ class Gplayer:
     if int(data) != self._iter:
       print "c++ iter: " + data + " python iter: " + str(self._iter)
       sys.exit(0)
-    state, reward_map = parse.getstate("state.txt", self._iter, self._maxlength, self._actionsize, self._regs2idx)
+    state, reward_map, _ = parse.getstate("state.txt", self._iter, self._maxlength, self._actionsize, self._regs2idx, self._tofile)
     return state, reward_map
 
   def among(self, distri, reward_map, ac, valid):

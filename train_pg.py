@@ -428,6 +428,7 @@ def train_PG(
             # in policy gradient methods: normalize adv_n to have mean zero and std=1. 
             # YOUR_CODE_HERE
             adv_n = (adv_n - np.mean(adv_n)) / np.std(adv_n)
+            adv_n = adv_n + 1.0
 
         #====================================================================================#
         #                           ----------SECTION 5----------

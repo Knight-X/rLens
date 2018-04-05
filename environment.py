@@ -24,7 +24,7 @@ class Environment(object):
       process.terminate()
       process.wait()
       print "process finish"
-      process = subprocess.Popen(['../llvm-reg/llvm/build/bin/llc', '-debug-only=regallocdl', '--regalloc=drl', 'mul.ll', '-o', 'convba.s'],shell=False, stdout=subprocess.PIPE)
+      process = subprocess.Popen(['../llvm-reg/llvm/build/bin/llc', '-debug-only=regallocdl', '--regalloc=drl', 'add.ll', '-o', 'convba.s'],shell=False, stdout=subprocess.PIPE)
       return process
   
   def terminate(self, process):
@@ -35,7 +35,7 @@ class Environment(object):
 class RandomPlayer:
   def __init__(self, sock):
     self._iter = 1
-    self._p = subprocess.Popen(['../llvm-reg/llvm/build/bin/llc', '-debug-only=regallocdl', '--regalloc=drl', 'mul.ll', '-o', 'convba.s'],shell=False, stdout=subprocess.PIPE)
+    self._p = subprocess.Popen(['../llvm-reg/llvm/build/bin/llc', '-debug-only=regallocdl', '--regalloc=drl', 'add.ll', '-o', 'convba.s'],shell=False, stdout=subprocess.PIPE)
     self._sock = sock
     self._sock.listen(5)
 
@@ -141,7 +141,7 @@ class Gplayer:
         return int(reward), ac, True
     elif valid and reward_map.get(str(ac)) == None:
         ac = self._regs2idx[str(ac)]
-        return -0.5, ac, False
+        return 0, ac, False
     elif not valid and reward_map.get(str(ac)) != None:
         reward = reward_map[str(ac)]
         ac = self._regs2idx[str(ac)]

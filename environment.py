@@ -141,7 +141,7 @@ class Gplayer:
         return int(reward), ac, True
     elif valid and reward_map.get(str(ac)) == None:
         ac = self._regs2idx[str(ac)]
-        return 0, ac, False
+        return 0.000001, ac, False
     elif not valid and reward_map.get(str(ac)) != None:
         reward = reward_map[str(ac)]
         ac = self._regs2idx[str(ac)]
@@ -156,7 +156,7 @@ class Gplayer:
             index = index + 1   
     #if random.random() < 0.05:
     actions = softmax(actions)
-    action = np.random.choice(index, 1)
+    action = np.random.choice(index, 1, p=actions)
     action = action[0]
     #else:
     #  actions = softmax(actions)

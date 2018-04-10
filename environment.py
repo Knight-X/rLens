@@ -35,6 +35,7 @@ class Environment(object):
 class RandomPlayer:
   def __init__(self, sock):
     self._iter = 1
+    self._totalr = 0.0
     self._p = subprocess.Popen(['../llvm-reg/llvm/build/bin/llc', '-debug-only=regallocdl', '--regalloc=drl', 'add.ll', '-o', 'convba.s'],shell=False, stdout=subprocess.PIPE)
     self._sock = sock
     self._sock.listen(5)
@@ -50,14 +51,16 @@ class RandomPlayer:
       if (data[0] == 'e'):
         terminal = True
         break
-      reward_map, slotend = self.getState(data)
+      reward_map, sortedr, slotend = self.getState(data)
       maxlength = max(slotend, maxlength)
-      action = self.doAction(reward_map)
+      action, score = self.doAction(sortedr)
       conn.send(str(action))
       self._iter = self._iter + 1
+      self._totalr = self._totalr + int(score)
       for g in reward_map.keys():
         actions.add(g)
 
+    print "the totalreward is " + str(self._totalr)
     self._iter = 1 
     self._totalr = 0.0
     self.terminate()
@@ -69,12 +72,13 @@ class RandomPlayer:
       if int(data) != self._iter:
           print "c++ iter: " + data + " python iter: " + str(self._iter)
           sys.exit(0)
-      state, reward_map, maxlength, _ = parse.fileToImage("state.txt", self._iter)
-      return reward_map, maxlength
+      state, reward_map, sortedr, maxlength, _ = parse.fileToImage("state.txt", self._iter)
+      return reward_map, sortedr, maxlength
 
   def doAction(self, reward_map):
-      action = reward_map.keys()[0]
-      return action 
+      action = reward_map[-1][0]
+      score = reward_map[-1][1]
+      return action, score 
   def terminate(self):
     self._p.terminate()
     self._p.wait()

@@ -68,8 +68,9 @@ def fileToImage(state, iteration):
     #name = "filename" + str(iteration) + ".png"
     #cv2.imwrite(name, img)
     reward_dic.update(vreward_dic)
+    sortedr = sorted(reward_dic.items(), key=lambda d: int(d[1]))
     img = img.flatten()
-    return img, reward_dic, maxmum, arr
+    return img, reward_dic, sortedr, maxmum, arr
 
 def physicalre(a, reward_dic, ratio, actionsize, slotstart, slotend, g):
     for key in reward_dic:

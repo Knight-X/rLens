@@ -133,7 +133,8 @@ def getstate(state, iteration, maxlength, actionsize, reg2idx, tofile):
     filename = "./data/log/filename" + str(iteration) + ".txt"
     copy2(state, filename)
     reward_dic.update(vreward_dic)
-    s = a.flatten()
+    #s = a.flatten()
+    s = np.reshape(a, (45, 45, 1))
     return s, reward_dic, a
 
 

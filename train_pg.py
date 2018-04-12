@@ -42,6 +42,22 @@ def build_mlp(
 
     with tf.variable_scope(scope):
         dense = input_placeholder 
+        conv1 = tf.layers.conv2d(inputs=dense,
+                         filters=32,
+                         kernel_size=[5, 5],
+                         padding="same",
+                         activation=tf.nn.relu
+                        )
+        max1 = tf.layers.max_pooling2d(conv1, pool_size=[2, 2], strides=2) 
+        conv2 = tf.layers.conv2d(inputs=max1,
+                         filters=64,
+                         kernel_size=[5, 5],
+                         padding="same",
+                         activation=tf.nn.relu
+                        )
+        pool2 = tf.layers.max_pooling2d(conv2, pool_size=[2, 2], strides=2) 
+        pool2_flat = tf.reshape(pool2, [-1, 11 * 11 * 64])
+        dense = tf.layers.dense(inputs=pool2_flat, units=1024, activation=tf.nn.relu)
         for i in range(n_layers):
             dense = tf.layers.dense(
                 inputs=dense,
@@ -51,7 +67,7 @@ def build_mlp(
         return tf.layers.dense(
             inputs=dense,
             units=output_size,
-            activation=output_activation)
+            activation=output_activation), pool2
 
 
 
@@ -147,7 +163,7 @@ def train_PG(
     # Need these for batch observations / actions / advantages in policy gradient loss function.
     #========================================================================================#
 
-    sy_ob_no = tf.placeholder(shape=[None, ob_dim], name="ob", dtype=tf.float32)
+    sy_ob_no = tf.placeholder(shape=[None, actionsize , actionsize, 1], name="ob", dtype=tf.float32)
     if discrete:
         sy_ac_na = tf.placeholder(shape=[None], name="ac", dtype=tf.int32) 
     else:
@@ -198,7 +214,7 @@ def train_PG(
 
     if discrete:
         # YOUR_CODE_HERE
-        sy_logits_na = build_mlp(
+        sy_logits_na, pool2 = build_mlp(
             input_placeholder=sy_ob_no,
             output_size=ac_dim,
             scope="build_nn",
@@ -295,7 +311,7 @@ def train_PG(
                     env.render()
                     time.sleep(0.05)
                 obs.append(ob)
-                [distri], acc = sess.run([sy_soft, sy_sampled_ac], feed_dict={sy_ob_no : ob[None]})
+                [distri], acc, t = sess.run([sy_soft, sy_sampled_ac, pool2], feed_dict={sy_ob_no : ob[None]})
                 #[distri, acc] = sess.run([sy_soft, sy_sampled_ac], feed_dict={sy_ob_no : ob[None]})
                 #ac, valid = en.among(distri, acc[0], valid)
                 rew, ac, valid = env.among(distri, reward_map, acc[0], valid)

@@ -1,7 +1,7 @@
 import numpy as np
+import logz
 import tensorflow as tf
 import environment as en 
-import logz
 import scipy.signal
 import os
 import time
@@ -9,6 +9,7 @@ import inspect
 from multiprocessing import Process
 import gym
 import function as func 
+import policy_gradient
 
 import socket
 HOST = '127.0.0.1'
@@ -18,8 +19,6 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 sock.bind((HOST, PORT))
 
 
-def pathlength(path):
-    return len(path["reward"])
 
 
 
@@ -93,109 +92,9 @@ def train_PG(
     #========================================================================================#
     # Training Loop
     #========================================================================================#
+    pg = policy_gradient.PolicyGradient(n_iter, env, act, animate, min_timesteps_per_batch, max_path_length, reward_to_go)
 
-    total_timesteps = 0
-
-    for itr in range(n_iter):
-        print("********** Iteration %i ************"%itr)
-
-        # Collect paths until we have enough timesteps
-        timesteps_this_batch = 0
-        paths = []
-        while True:
-            ob, reward_map = env.reset()
-            #ob = env.reset()
-            obs, acs, rewards = [], [], []
-            animate_this_episode=(len(paths)==0 and (itr % 10 == 0) and animate)
-            steps = 0
-            valid = True 
-            while True:
-                if animate_this_episode:
-                    env.render()
-                    time.sleep(0.05)
-                obs.append(ob)
-                [distri], acc = act.run(ob[None]) 
-                #[distri, acc] = act.run(ob[None])
-                #ac, valid = en.among(distri, acc[0], valid)
-                rew, ac, valid = env.among(distri, reward_map, acc[0], valid)
-                acs.append(ac)
-                if valid == False:
-                  steps += 1
-                  #rew = -0.01
-                  rewards.append(rew)
-                  continue
-
-                ob, done, reward_map = env.step(ac)
-                #ob, rew, done, _ = env.step(ac)
-                rewards.append(rew)
-                steps += 1
-                if done or steps > max_path_length:
-                    break
-            path = {"observation" : np.array(obs), 
-                    "reward" : np.array(rewards), 
-                    "action" : np.array(acs)}
-            paths.append(path)
-            timesteps_this_batch += pathlength(path)
-            print str(timesteps_this_batch) + "go"
-            if timesteps_this_batch > min_timesteps_per_batch:
-                break
-        total_timesteps += timesteps_this_batch
-
-        # Build arrays for observation, action for the policy gradient update by concatenating 
-        # across paths
-        ob_no = np.concatenate([path["observation"] for path in paths])
-        ac_na = np.concatenate([path["action"] for path in paths])
-
-        # YOUR_CODE_HERE
-        def discount_rewards_to_go(rewards, gamma):
-            res = [] 
-            future_reward = 0
-            for r in reversed(rewards):
-                future_reward = future_reward * gamma + r
-                res.append(future_reward)
-            return res[::-1]
-                                                                        
-                                                                        
-        def sum_discount_rewards(rewards, gamma):
-            return sum((gamma**i) * rewards[i] for i in range(len(rewards)))
-        q_n = []
-        if reward_to_go:
-            q_n = np.concatenate([discount_rewards_to_go(path["reward"], gamma) for path in paths])
-        else:
-            q_n = np.concatenate([[sum_discount_rewards(path["reward"], gamma)] * pathlength(path) for path in paths])
-
-        adv_n = q_n.copy()
-
-        #====================================================================================#
-        #                           ----------SECTION 4----------
-        # Advantage Normalization
-        #====================================================================================#
-
-        if normalize_advantages:
-            # On the next line, implement a trick which is known empirically to reduce variance
-            # in policy gradient methods: normalize adv_n to have mean zero and std=1. 
-            # YOUR_CODE_HERE
-            adv_n = (adv_n - np.mean(adv_n)) / (np.std(adv_n) + 1e-8)
-            adv_n = adv_n * (1.0 + 1e-8) + 10.0
-
-
-        # Log diagnostics
-        _, loss_value = act.update(ob_no, ac_na, adv_n)
-        returns = [path["reward"].sum() for path in paths]
-        ep_lengths = [pathlength(path) for path in paths]
-        logz.log_tabular("Time", time.time() - start)
-        logz.log_tabular("Iteration", itr)
-        logz.log_tabular("AverageReturn", np.mean(returns))
-        logz.log_tabular("Loss", loss_value)
-        logz.log_tabular("StdReturn", np.std(returns))
-        logz.log_tabular("MaxReturn", np.max(returns))
-        logz.log_tabular("MinReturn", np.min(returns))
-        logz.log_tabular("EpLenMean", np.mean(ep_lengths))
-        logz.log_tabular("EpLenStd", np.std(ep_lengths))
-        logz.log_tabular("TimestepsThisBatch", timesteps_this_batch)
-        logz.log_tabular("TimestepsSoFar", total_timesteps)
-        logz.dump_tabular()
-        logz.pickle_tf_vars()
+    pg.run(gamma, logz, start)
 
 def gen(actionset):
     idx2regs = [a for a in actionset]

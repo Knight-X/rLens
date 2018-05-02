@@ -6,33 +6,16 @@ import os
 import struct
 import parse
 
+class Player:
+  def reset(self):
+      return;
 
-class Environment(object):
+  def step(self):
+      return;
+      
 
-  def act(self, action):
-        f = open("action.txt", "w")
-        f.write(str(action))
-        f.close()
-        g = open("actionbarrier.txt", "w")
-        g.close()
-  def in_terminal_state(self):
-        if os.path.isfile("terminal.txt") == True:
-            os.remove("terminal.txt")
-            return True
-        return False
-  def reset(self, process):
-      process.terminate()
-      process.wait()
-      print "process finish"
-      process = subprocess.Popen(['../llvm-reg/llvm/build/bin/llc', '-debug-only=regallocdl', '--regalloc=drl', 'add.ll', '-o', 'convba.s'],shell=False, stdout=subprocess.PIPE)
-      return process
-  
-  def terminate(self, process):
-      process.terminate()
-      process.wait()
-      print "process finish"
 
-class RandomPlayer:
+class RandomPlayer(Player):
   def __init__(self, sock):
     self._iter = 1
     self._totalr = 0.0
@@ -40,7 +23,7 @@ class RandomPlayer:
     self._sock = sock
     self._sock.listen(5)
 
-  def interact(self):
+  def step(self):
     terminal = False
     actions = set()
     maxlength = 0
@@ -79,12 +62,13 @@ class RandomPlayer:
       action = reward_map[-1][0]
       score = reward_map[-1][1]
       return action, score 
+
   def terminate(self):
     self._p.terminate()
     self._p.wait()
     print "process finish"
 
-class Gplayer:
+class Gplayer(Player):
   def __init__(self, sock, idx2regs, regs2idx, maxlength, tofile):
     self._sock = sock
     self._sock.listen(5)

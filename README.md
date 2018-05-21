@@ -17,6 +17,6 @@ usage:
 
 
 Result:
-  ![Alt text](./pics/my_loss.png "Optional title")
+  ![alt text](./pics/my_loss.png "Optional title")
 reference:
   https://github.com/berkeleydeeprlcourse/homework 

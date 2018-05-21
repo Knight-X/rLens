@@ -125,11 +125,13 @@ def getstate(state, iteration, maxlength, actionsize, reg2idx, tofile):
     if not os.path.exists(directory):
         os.makedirs(directory) 
     if tofile:
-        name = "./data/log/filename" + str(iteration) + ".png"
-        plt.imshow(a, interpolation='nearest')
-        plt.xticks(np.arange(0.0, 45, 1), np.arange(0, 45, 5))
-        plt.yticks(np.arange(0.0, 45, 1), np.arange(0, 45, 5))
-        plt.savefig(name)
+        filename = "./data/log/filename" + str(iteration) + ".txt"
+        copy2(state, filename)
+        #name = "./data/log/filename" + str(iteration) + ".png"
+        #plt.imshow(a, interpolation='nearest')
+        #plt.xticks(np.arange(0.0, 45, 1), np.arange(0, 45, 5))
+        #plt.yticks(np.arange(0.0, 45, 1), np.arange(0, 45, 5))
+        #plt.savefig(name)
     filename = "./data/log/filename" + str(iteration) + ".txt"
     copy2(state, filename)
     reward_dic.update(vreward_dic)

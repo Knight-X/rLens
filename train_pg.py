@@ -133,6 +133,7 @@ def main():
 
     max_path_length = args.ep_len if args.ep_len > 0 else None
     rplayer = en.RandomPlayer(sock)
+    rplayer.reset()
     actionset, maxlength = rplayer.step()
     idx2regs, regs2idx = gen(actionset)
     name = "./data/log/register maping.txt"

@@ -1,6 +1,6 @@
-
 import tensorflow as tf
 import backend as bk
+
 class Function:
     def __init__(self):
         self._name = "go" 
@@ -14,6 +14,7 @@ class Function:
 
     def createPred(self):
         return;
+
     def createOptimizer(self):
         return;
 

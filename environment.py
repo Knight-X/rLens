@@ -6,7 +6,9 @@ import os
 import struct
 import parse
 
+
 class Player:
+
   def reset(self):
       return;
 
@@ -17,11 +19,13 @@ class Player:
 
 class RandomPlayer(Player):
   def __init__(self, sock):
-    self._iter = 1
     self._totalr = 0.0
-    self._p = subprocess.Popen(['../llvm-reg/llvm/build/bin/llc', '-debug-only=regallocdl', '--regalloc=drl', 'add.ll', '-o', 'convba.s'],shell=False, stdout=subprocess.PIPE)
     self._sock = sock
     self._sock.listen(5)
+
+  def reset(self):
+      self._iter = 1
+      self._p = subprocess.Popen(['../llvm-reg/llvm/build/bin/llc', '-debug-only=regallocdl', '--regalloc=drl', 'program/target.ll', '-o', 'program/convba.s'],shell=False, stdout=subprocess.PIPE)
 
   def step(self):
     terminal = False
@@ -88,7 +92,7 @@ class Gplayer(Player):
       self._p.wait()
 
   def reset(self):
-    self._p = subprocess.Popen(['../llvm-reg/llvm/build/bin/llc', '-debug-only=regallocdl', '--regalloc=drl', 'add.ll', '-o', 'convba.s'],shell=False, stdout=subprocess.PIPE)
+    self._p = subprocess.Popen(['../llvm-reg/llvm/build/bin/llc', '-debug-only=regallocdl', '--regalloc=drl', 'program/target.ll', '-o', 'program/convba.s'],shell=False, stdout=subprocess.PIPE)
     print "start accept " + str(self._iter)
     self._iter = 1
     self._conn, addr = self._sock.accept()

@@ -8,6 +8,9 @@ import parse
 
 
 class Player:
+  def __init__(self, log_dir="./data/log/"):
+      self._iter = 1
+      self._log_dir = log_dir
 
   def reset(self):
       return;
@@ -18,8 +21,9 @@ class Player:
 
 
 class RandomPlayer(Player):
-  def __init__(self, sock):
-    self._totalr = 0.0
+  def __init__(self,sock,  log_dir):
+    Player.__init__(self, log_dir)
+    self._total_reward = 0.0
     self._sock = sock
     self._sock.listen(5)
 
@@ -43,13 +47,13 @@ class RandomPlayer(Player):
       action, score = self.doAction(sortedr)
       conn.send(str(action))
       self._iter = self._iter + 1
-      self._totalr = self._totalr + int(score)
+      self._total_reward = self._total_reward + int(score)
       for g in reward_map.keys():
         actions.add(g)
 
-    print "the totalreward is " + str(self._totalr)
+    print "the totalreward is " + str(self._total_reward)
     self._iter = 1 
-    self._totalr = 0.0
+    self._total_reward = 0.0
     self.terminate()
     return actions, maxlength
 
@@ -73,17 +77,14 @@ class RandomPlayer(Player):
     print "process finish"
 
 class Gplayer(Player):
-  def __init__(self, sock, idx2regs, regs2idx, maxlength, tofile):
+  def __init__(self, sock, idx2regs, regs2idx, maxlength, tofile, log_dir):
+    Player.__init__(self, log_dir)
     self._sock = sock
     self._sock.listen(5)
-    self._iter = 1
-    self._totalr = 0.0
     self._idx2Regs = idx2regs
     self._regs2idx = regs2idx
     self._maxlength = maxlength + 1
     self._actionsize = len(idx2regs)
-    self.best_reward = 0
-    self.process_init = False
     self._tofile = tofile
 
   def terprocess(self):
@@ -101,11 +102,10 @@ class Gplayer(Player):
     return state, reward_map
 
   def step(self, action):
-    reward = 0.0
-    name = "./data/log/action" + str(self._iter) + ".txt"
-    f = open(name, "w")
-    f.write(str(action))
-    f.close()
+    #for log action data
+
+    self.log(action)
+    #prepare action and send action
     action = self._idx2Regs[action]
     self._conn.send(str(action))
     self._iter = self._iter + 1
@@ -114,17 +114,23 @@ class Gplayer(Player):
     if data[0] == 'e':
         self.terprocess()
         return [], True, []
+
+    #get the next state after do action 
     state, reward_map = self.getState(data)
     return state, False, reward_map
 
   def getState(self, data):
     data = struct.unpack("!i", data)[0]
+    # unpack the socket data to test if it is terminated 
     if int(data) != self._iter:
       print "c++ iter: " + data + " python iter: " + str(self._iter)
       sys.exit(0)
+
+    # parse the state data which is outputed from compiler
     state, reward_map, _ = parse.getstate("state.txt", self._iter, self._maxlength, self._actionsize, self._regs2idx, self._tofile)
     return state, reward_map
 
+  # test the action is valid
   def among(self, distri, reward_map, ac, valid):
     ac = self._idx2Regs[ac]
     if valid and reward_map.get(str(ac)) != None:
@@ -138,6 +144,8 @@ class Gplayer(Player):
         reward = reward_map[str(ac)]
         ac = self._regs2idx[str(ac)]
         return int(reward), ac, True
+
+    # find the register which is in the candidate list
     finalidx2reg = {}
     index = 0
     actions = [] 
@@ -146,6 +154,7 @@ class Gplayer(Player):
             actions.insert(index, distri[self._regs2idx[str(i)]])
             finalidx2reg[str(index)] = i
             index = index + 1   
+    #the comment part is the epislon greedy
     #if random.random() < 0.05:
     actions = softmax(actions)
     action = np.random.choice(index, 1, p=actions)
@@ -160,6 +169,15 @@ class Gplayer(Player):
     action = self._regs2idx[str(action)]
     return int(reward), action, True
 
+  def log(self, action):
+    name = self._log_dir + "action" + str(self._iter) + ".txt"
+    f = open(name, "w")
+    f.write(str(action))
+    f.close()
+
+
+
+# helper function for simple reinforcement learning example 
 def among(distri, ac, valid):
     reward_map = {"1": 3, "0": 5}
     if valid and reward_map.get(str(ac)) != None:

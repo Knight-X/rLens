@@ -68,7 +68,7 @@ def train_PG(
 
     # Make the gym environment
     #env = gym.make(env_name)
-    env = en.Gplayer(sock, idx2regs, regs2idx, maxlength, tofile)
+    env = en.Gplayer(sock, idx2regs, regs2idx, maxlength, tofile, "./data/log/")
     act = func.ActorFunc()
     
     # Is this env continuous, or discrete?
@@ -132,7 +132,7 @@ def main():
         os.makedirs(logdir)
 
     max_path_length = args.ep_len if args.ep_len > 0 else None
-    rplayer = en.RandomPlayer(sock)
+    rplayer = en.RandomPlayer(sock, "./data/log/")
     rplayer.reset()
     actionset, maxlength = rplayer.step()
     idx2regs, regs2idx = gen(actionset)

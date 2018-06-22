@@ -15,8 +15,9 @@ purpose:
   2. target-dependent allocation strategy
 
 usage:
-  1. llc -emit-llvm -S add.c
-  2. mv add.ll program/target.ll
+  1. llc -emit-llvm -S targetfile 
+  2. mv targetfile program/
+  4. modify src field of rlcofnig to  targetfile name  
   3. python train_pg.py CartPole-v0 -n 50000 -b 5000 -e 1 -rtg -dna --exp_name test_compiler_softmax_falut_test_norandom
   python train_pg.py -h for more information
 

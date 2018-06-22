@@ -1,0 +1,4 @@
+compiler = ../llvm-reg/llvm/build/bin/llc
+src = program/example.ll
+target = program/convba.s 
+

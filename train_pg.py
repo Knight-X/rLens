@@ -11,16 +11,6 @@ import gym
 import function as func 
 import policy_gradient
 
-import socket
-HOST = '127.0.0.1'
-PORT = 1992
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-sock.bind((HOST, PORT))
-
-
-
-
 
 #============================================================================================#
 # Policy Gradient
@@ -68,7 +58,7 @@ def train_PG(
 
     # Make the gym environment
     #env = gym.make(env_name)
-    env = en.Gplayer(sock, idx2regs, regs2idx, maxlength, tofile, "./data/log/")
+    env = en.Gplayer(idx2regs, regs2idx, maxlength, tofile, "./data/log/")
     act = func.ActorFunc()
     
     # Is this env continuous, or discrete?
@@ -132,7 +122,7 @@ def main():
         os.makedirs(logdir)
 
     max_path_length = args.ep_len if args.ep_len > 0 else None
-    rplayer = en.RandomPlayer(sock, "./data/log/")
+    rplayer = en.RandomPlayer("./data/log/")
     rplayer.reset()
     actionset, maxlength = rplayer.step()
     idx2regs, regs2idx = gen(actionset)

@@ -5,6 +5,12 @@ import random
 import os
 import struct
 import parse
+import socket
+HOST = '127.0.0.1'
+PORT = 1992
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.bind((HOST, PORT))
 
 
 class Player:
@@ -21,15 +27,20 @@ class Player:
 
 
 class RandomPlayer(Player):
-  def __init__(self,sock,  log_dir):
+  def __init__(self, log_dir):
     Player.__init__(self, log_dir)
     self._total_reward = 0.0
     self._sock = sock
     self._sock.listen(5)
+    f = open('rlconfig', 'r')
+    self._llc = f.readline().split(' ')[2].replace("\n", "")
+    self._src = f.readline().split(' ')[2].replace("\n", "")
+    self._target = f.readline().split(' ')[2].replace("\n", "")
+    f.close()
 
   def reset(self):
       self._iter = 1
-      self._p = subprocess.Popen(['../llvm-reg/llvm/build/bin/llc', '-debug-only=regallocdl', '--regalloc=drl', 'program/target.ll', '-o', 'program/convba.s'],shell=False, stdout=subprocess.PIPE)
+      self._p = subprocess.Popen([self._llc, '-debug-only=regallocdl', '--regalloc=drl', self._src, '-o', self._target],shell=False, stdout=subprocess.PIPE)
 
   def step(self):
     terminal = False
@@ -77,7 +88,7 @@ class RandomPlayer(Player):
     print "process finish"
 
 class Gplayer(Player):
-  def __init__(self, sock, idx2regs, regs2idx, maxlength, tofile, log_dir):
+  def __init__(self, idx2regs, regs2idx, maxlength, tofile, log_dir):
     Player.__init__(self, log_dir)
     self._sock = sock
     self._sock.listen(5)
@@ -86,6 +97,11 @@ class Gplayer(Player):
     self._maxlength = maxlength + 1
     self._actionsize = len(idx2regs)
     self._tofile = tofile
+    f = open('rlconfig', 'r')
+    self._llc = f.readline().split(' ')[2].replace("\n", "")
+    self._src = f.readline().split(' ')[2].replace("\n", "")
+    self._target = f.readline().split(' ')[2].replace("\n", "")
+    f.close()
 
   def terprocess(self):
       print "terminal the process in python"
@@ -93,7 +109,7 @@ class Gplayer(Player):
       self._p.wait()
 
   def reset(self):
-    self._p = subprocess.Popen(['../llvm-reg/llvm/build/bin/llc', '-debug-only=regallocdl', '--regalloc=drl', 'program/target.ll', '-o', 'program/convba.s'],shell=False, stdout=subprocess.PIPE)
+    self._p = subprocess.Popen([self._llc, '-debug-only=regallocdl', '--regalloc=drl', self._src, '-o', self._target],shell=False, stdout=subprocess.PIPE)
     print "start accept " + str(self._iter)
     self._iter = 1
     self._conn, addr = self._sock.accept()
